@@ -5,7 +5,7 @@ from .config import writable_config_path
 from . import migrate as M
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="smart-router")
+    p = argparse.ArgumentParser(prog="warden")
     sub = p.add_subparsers(dest="cmd")
     sub.add_parser("serve")
     m = sub.add_parser("migrate")
@@ -96,7 +96,7 @@ def run(argv, env=None, home=None, now=None) -> int:
             print(M.render_plan(plan)); return 0
         run_id, ts = now()
         man = M.apply_migration(cenv, reg, plan, run_id, ts)
-        print(f"migrated (id={man['id']}). Restart Claude Code to apply. Restore with: smart-router restore --id {man['id']}")
+        print(f"migrated (id={man['id']}). Restart Claude Code to apply. Restore with: warden restore --id {man['id']}")
         return 0
     if cmd == "restore":
         ok = M.restore(cenv, reg, args.id)
@@ -117,7 +117,7 @@ def _run_routing(args, reg) -> int:
     from .routing import load_routing, save_routing
     sub = args.routing_cmd
     if sub is None:
-        print("usage: smart-router routing {show,set-mode,prefer,exclude,add-rule}", file=sys.stderr)
+        print("usage: warden routing {show,set-mode,prefer,exclude,add-rule}", file=sys.stderr)
         return 2
     block = load_routing(reg)  # validated, defaults filled
     if sub == "show":

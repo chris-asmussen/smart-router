@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "smart-router"
-version = "0.1.0"
-description = "An MCP server that fronts many downstream MCP servers and Skills behind just three tools, keeping the agent's context window small."
+name = "warden"
+version = "0.2.0"
+description = "An MCP server that fronts many MCP servers and Skills behind a small tool set and routes to the best one, keeping the agent's context window small."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -24,12 +24,12 @@ classifiers = [
 dependencies = ["mcp>=2"]
 
 [project.urls]
-Homepage = "https://github.com/chris-asmussen/smart-router"
-Repository = "https://github.com/chris-asmussen/smart-router"
-Issues = "https://github.com/chris-asmussen/smart-router/issues"
+Homepage = "https://github.com/chris-asmussen/warden"
+Repository = "https://github.com/chris-asmussen/warden"
+Issues = "https://github.com/chris-asmussen/warden/issues"
 
 [project.scripts]
-smart-router = "smart_router.__main__:main"
+warden = "warden.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["smart_router*"]
+include = ["warden*"]

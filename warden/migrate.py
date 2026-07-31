@@ -1,4 +1,4 @@
-"""Plan / apply / restore migrations of Claude MCPs + Skills into smart-router."""
+"""Plan / apply / restore migrations of Claude MCPs + Skills into warden."""
 import pathlib
 from dataclasses import dataclass, field
 from .claude_env import ClaudeEnv
@@ -41,7 +41,7 @@ def plan_migration(env: ClaudeEnv, reg: R.Registry, targets) -> MigrationPlan:
     return plan
 
 def render_plan(plan: MigrationPlan) -> str:
-    lines = ["smart-router migration (dry run):"]
+    lines = ["warden migration (dry run):"]
     for n in plan.register_mcp: lines.append(f"  + register mcp server: {n} (removed from Claude)")
     for k in plan.disable_plugins: lines.append(f"  + register plugin skills + DISABLE plugin: {k} (disables ALL its features)")
     for m in plan.move_personal_skills: lines.append(f"  + move personal skill: {m['name']} -> {m['to']}")

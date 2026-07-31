@@ -1,7 +1,7 @@
 import json, pathlib, sys, tempfile, unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from tests.fixtures.fake_claude_home import build_fake_claude_home
-from smart_router.claude_env import ClaudeEnv
+from warden.claude_env import ClaudeEnv
 
 class ClaudeEnvReadTests(unittest.TestCase):
     def test_discovers_mcp_servers_across_scopes(self):

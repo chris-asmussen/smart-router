@@ -1,16 +1,16 @@
-# How to contribute to smart-router
+# How to contribute to warden
 
-Thank you for your interest in smart-router. This project puts many MCP servers
-and Skills behind a small set of 4 tools. We prefer contributions that keep this
+Thank you for your interest in warden. This project puts many MCP servers
+and Skills behind a small set of 5 tools. We prefer contributions that keep this
 set small and the core light.
 
 ## How to start
 
 ```bash
-git clone https://github.com/chris-asmussen/smart-router
-cd smart-router
+git clone https://github.com/chris-asmussen/warden
+cd warden
 python -m venv .venv && source .venv/bin/activate
-pip install -e .            # installs the mcp dependency and the smart-router command
+pip install -e .            # installs the mcp dependency and the warden command
 ```
 
 You must have Python 3.10 or later.
@@ -41,11 +41,11 @@ looks only at the code against the standards below.
 - **Write the test first.** Each change to the behavior needs a test. This
   codebase is test-driven. Use the patterns in `tests/`. Use temporary
   directories or the builder in `tests/fixtures/fake_claude_home.py`. A test
-  must not read or change a real `~/.claude` or `~/.config/smart-router`.
+  must not read or change a real `~/.claude` or `~/.config/warden`.
 - **Keep the core in the standard library.** The modules `config`, `registry`,
   `claude_env`, `migrate`, and `cli` use only the standard library. Only
   `server.py` imports `mcp`. Open an issue before you add a dependency.
-- **Keep the set of tools small.** The purpose of smart-router is a small agent
+- **Keep the set of tools small.** The purpose of warden is a small agent
   context. A new model-facing MCP tool needs a strong reason. Prefer an `admin`
   action or a CLI subcommand.
 - **Keep the code deterministic.** The modules `registry` and `migrate` do not
@@ -74,7 +74,7 @@ for the user behavior. Refer to the docstrings for the reason behind each part.
    that the pull request closes.
 
 We mark good first contributions with the label
-[`good first issue`](https://github.com/chris-asmussen/smart-router/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+[`good first issue`](https://github.com/chris-asmussen/warden/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ## How to report a bug or request a feature
 

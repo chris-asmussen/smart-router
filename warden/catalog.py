@@ -38,7 +38,7 @@ async def build_tool_catalog(mcp_servers: dict[str, Any]) -> list[dict[str, Any]
                         "input_schema": tool.input_schema,
                     })
         except Exception as exc:  # one unreachable downstream server shouldn't kill the router
-            print(f"smart-router: failed to catalog '{server_name}': {exc}", file=sys.stderr)
+            print(f"warden: failed to catalog '{server_name}': {exc}", file=sys.stderr)
     return entries
 
 

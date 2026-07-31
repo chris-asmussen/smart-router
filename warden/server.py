@@ -1,4 +1,4 @@
-"""smart-router MCP server.
+"""warden MCP server.
 
 Exposes a small, fixed set of tools to the calling agent — search, call_tool,
 use_skill, admin, route — regardless of how many downstream MCP servers or
@@ -23,7 +23,7 @@ from .search import search_catalog
 
 # Populated by `lifespan` at server startup, before any tool call is served.
 # Building the catalog here (rather than at import time) keeps `import
-# smart_router.server` side-effect free — importing the module no longer spawns
+# warden.server` side-effect free — importing the module no longer spawns
 # every configured downstream subprocess — and runs the async catalog build on
 # the server's own event loop.
 CONFIG: dict[str, Any] = {}
@@ -41,7 +41,7 @@ async def lifespan(_server: MCPServer):
     reg = _R.load_registry()
     CONFIG = {"mcp_servers": reg.mcp_servers, "skill_dirs": reg.skill_dirs}
     if not reg.mcp_servers and not reg.skill_dirs:
-        print("smart-router: registry is empty; use the `admin` tool or `smart-router "
+        print("warden: registry is empty; use the `admin` tool or `warden "
               "migrate` to add downstream servers/skills.", file=sys.stderr)
     tools = await build_tool_catalog(CONFIG["mcp_servers"])
     SKILLS = load_skills(CONFIG["skill_dirs"])
@@ -50,7 +50,7 @@ async def lifespan(_server: MCPServer):
 
 
 mcp = MCPServer(
-    "smart-router",
+    "warden",
     version=__version__,
     lifespan=lifespan,
     instructions="Call `search` before assuming a tool or skill is unavailable; "
@@ -126,7 +126,7 @@ def _sync_config_from(reg) -> None:
 
 @mcp.tool()
 async def admin(action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Manage the smart-router registry. Actions: list, register_mcp, register_skill,
+    """Manage the warden registry. Actions: list, register_mcp, register_skill,
     unregister, migrate, restore, get_routing, set_routing. `params` carries the
     action's arguments."""
     params = params or {}

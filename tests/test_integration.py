@@ -1,6 +1,6 @@
-"""End-to-end integration test: drive smart-router over real stdio MCP.
+"""End-to-end integration test: drive warden over real stdio MCP.
 
-Launches the smart-router server as a subprocess with a config pointing at a
+Launches the warden server as a subprocess with a config pointing at a
 fixture downstream server (tests/fixtures/echo_server.py) and a fixture skill,
 then exercises all three exposed tools through an MCP client.
 
@@ -38,7 +38,7 @@ class SmartRouterIntegrationTests(unittest.TestCase):
         from mcp.client.stdio import stdio_client
 
         with tempfile.TemporaryDirectory() as tmp:
-            config_path = pathlib.Path(tmp) / "smart-router.config.json"
+            config_path = pathlib.Path(tmp) / "warden.config.json"
             config_path.write_text(json.dumps({
                 "mcp_servers": {
                     "echo": {
@@ -50,15 +50,15 @@ class SmartRouterIntegrationTests(unittest.TestCase):
                 "skill_dirs": [str(FIXTURES / "skills")],
             }))
 
-            # Full env + overrides so the subprocess can import smart_router and
-            # locate the config via SMART_ROUTER_CONFIG (CWD-independent).
+            # Full env + overrides so the subprocess can import warden and
+            # locate the config via WARDEN_CONFIG (CWD-independent).
             env = dict(os.environ)
-            env["SMART_ROUTER_CONFIG"] = str(config_path)
+            env["WARDEN_CONFIG"] = str(config_path)
             env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
 
             params = StdioServerParameters(
                 command=sys.executable,
-                args=["-m", "smart_router"],
+                args=["-m", "warden"],
                 env=env,
                 cwd=tmp,  # deliberately not the repo root
             )
@@ -111,10 +111,10 @@ class SmartRouterIntegrationTests(unittest.TestCase):
                             "exclude": [], "rules": []},
             }))
             env = dict(os.environ)
-            env["SMART_ROUTER_CONFIG"] = str(cfg)
+            env["WARDEN_CONFIG"] = str(cfg)
             env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
             params = StdioServerParameters(
-                command=sys.executable, args=["-m", "smart_router"], env=env, cwd=tmp)
+                command=sys.executable, args=["-m", "warden"], env=env, cwd=tmp)
 
             async with Client(stdio_client(params)) as client:
                 tools = await client.list_tools()
@@ -146,11 +146,11 @@ class SmartRouterIntegrationTests(unittest.TestCase):
             cfg = pathlib.Path(tmp) / "config.json"
             cfg.write_text(json.dumps({"mcp_servers": {}, "skill_dirs": []}))
             env = dict(os.environ)
-            env["SMART_ROUTER_CONFIG"] = str(cfg)
+            env["WARDEN_CONFIG"] = str(cfg)
             env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
             params = StdioServerParameters(
                 command=sys.executable,
-                args=["-m", "smart_router"],
+                args=["-m", "warden"],
                 env=env,
                 cwd=tmp,
             )
@@ -175,10 +175,10 @@ class SmartRouterIntegrationTests(unittest.TestCase):
             cfg = pathlib.Path(tmp) / "config.json"
             cfg.write_text(json.dumps({"mcp_servers": {}, "skill_dirs": []}))
             env = dict(os.environ)
-            env["SMART_ROUTER_CONFIG"] = str(cfg)
+            env["WARDEN_CONFIG"] = str(cfg)
             env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
             params = StdioServerParameters(
-                command=sys.executable, args=["-m", "smart_router"], env=env, cwd=tmp)
+                command=sys.executable, args=["-m", "warden"], env=env, cwd=tmp)
 
             async with Client(stdio_client(params)) as client:
                 block = {

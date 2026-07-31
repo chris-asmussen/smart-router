@@ -3,12 +3,12 @@ import io, json, pathlib, sys, tempfile, unittest
 from contextlib import redirect_stdout, redirect_stderr
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from tests.fixtures.fake_claude_home import build_fake_claude_home
-from smart_router.cli import run
+from warden.cli import run
 
 class CliTests(unittest.TestCase):
     def _env(self, tmp):
         cfg = pathlib.Path(tmp) / "cfg" / "config.json"
-        return {"SMART_ROUTER_CONFIG": str(cfg), "SMART_ROUTER_HOME": str(pathlib.Path(tmp) / "cfg")}
+        return {"WARDEN_CONFIG": str(cfg), "WARDEN_HOME": str(pathlib.Path(tmp) / "cfg")}
 
     def test_add_mcp_then_list(self):
         with tempfile.TemporaryDirectory() as tmp:

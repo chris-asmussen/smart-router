@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question or discussion
-    url: https://github.com/chris-asmussen/smart-router/discussions
+    url: https://github.com/chris-asmussen/warden/discussions
     about: Ask a question or share an idea here. Do not open an issue for this.
   - name: Security vulnerability
-    url: https://github.com/chris-asmussen/smart-router/blob/main/SECURITY.md
+    url: https://github.com/chris-asmussen/warden/blob/main/SECURITY.md
     about: Report a security problem in private. Follow SECURITY.md. Do not open a public issue.

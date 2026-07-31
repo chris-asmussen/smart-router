@@ -1,6 +1,6 @@
 # Roadmap
 
-The main goal of smart-router is a small agent context. The agent must still get
+The main goal of warden is a small agent context. The agent must still get
 access to many MCP servers and Skills when it needs them. Each item here serves
 this goal. This document changes over time. Open an issue to propose a change.
 
@@ -16,10 +16,10 @@ this goal. This document changes over time. Open an issue to propose a change.
 
 ## Next (0.2 — usability)
 
-- Add a `smart-router status` command. Give the `list` command more output.
+- Add a `warden status` command. Give the `list` command more output.
 - Improve the `migrate` output. Show a dry-run difference by plugin. Show each
   item that `--apply` disables.
-- Add a `smart-router doctor` command. It checks the registry. It checks that
+- Add a `warden doctor` command. It checks the registry. It checks that
   the MCP servers respond.
 - Reuse a connection in `call_tool` when a downstream server gets many calls.
   The current code opens one connection for each call.
@@ -34,13 +34,13 @@ this goal. This document changes over time. Open an issue to propose a change.
 
 ## Not in scope
 
-- smart-router does not proxy the claude.ai integrations, for example Slack or
+- warden does not proxy the claude.ai integrations, for example Slack or
   Drive. These are not local stdio servers.
-- smart-router does not add more than the 4 model-facing tools (`search`,
+- warden does not add more than the 4 model-facing tools (`search`,
   `call_tool`, `use_skill`, and `admin`). A new function is an `admin` action or
   a CLI subcommand.
-- smart-router does not copy the automatic skill start of Claude Code.
+- warden does not copy the automatic skill start of Claude Code.
 
 Refer to the
-[good first issues](https://github.com/chris-asmussen/smart-router/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[good first issues](https://github.com/chris-asmussen/warden/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 to start.

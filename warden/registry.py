@@ -1,4 +1,4 @@
-"""Durable smart-router registry (mcp_servers + skill_dirs + migrations)."""
+"""Durable warden registry (mcp_servers + skill_dirs + migrations)."""
 import json, pathlib
 from dataclasses import dataclass, field
 from typing import Any

@@ -9,8 +9,8 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from smart_router.catalog import _parse_frontmatter, load_skills
-from smart_router.search import search_catalog
+from warden.catalog import _parse_frontmatter, load_skills
+from warden.search import search_catalog
 
 
 class SearchCatalogTests(unittest.TestCase):

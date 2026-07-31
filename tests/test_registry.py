@@ -1,6 +1,6 @@
 import pathlib, sys, tempfile, unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from smart_router.registry import (Registry, load_registry, save_registry,
+from warden.registry import (Registry, load_registry, save_registry,
     add_mcp_server, add_skill_dir, remove, summary)
 
 class RegistryTests(unittest.TestCase):

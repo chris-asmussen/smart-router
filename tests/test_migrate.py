@@ -2,9 +2,9 @@
 import pathlib, sys, tempfile, unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from tests.fixtures.fake_claude_home import build_fake_claude_home
-from smart_router.claude_env import ClaudeEnv
-from smart_router.registry import Registry, add_mcp_server
-from smart_router.migrate import plan_migration
+from warden.claude_env import ClaudeEnv
+from warden.registry import Registry, add_mcp_server
+from warden.migrate import plan_migration
 
 class PlanTests(unittest.TestCase):
     def _env_reg(self, tmp):
@@ -32,8 +32,8 @@ class PlanTests(unittest.TestCase):
             self.assertEqual(list(plan.register_mcp), ["local"])
 
 
-from smart_router.migrate import apply_migration, restore
-from smart_router.registry import save_registry, load_registry
+from warden.migrate import apply_migration, restore
+from warden.registry import save_registry, load_registry
 
 class ApplyRestoreTests(unittest.TestCase):
     def test_apply_then_restore_is_identity(self):

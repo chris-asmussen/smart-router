@@ -57,7 +57,7 @@ an individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement through GitHub's
-[private vulnerability reporting](https://github.com/chris-asmussen/smart-router/security/advisories/new)
+[private vulnerability reporting](https://github.com/chris-asmussen/warden/security/advisories/new)
 or by contacting the maintainer directly. All complaints will be reviewed and
 investigated promptly and fairly.
 

@@ -9,8 +9,8 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from smart_router.registry import Registry, load_registry
-from smart_router.routing import load_routing, plan_route, render_route, save_routing
+from warden.registry import Registry, load_registry
+from warden.routing import load_routing, plan_route, render_route, save_routing
 
 
 def _reg(tmp):

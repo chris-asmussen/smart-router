@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-smart-router.config.json
+warden.config.json
 .worktrees/
 
 # Build artifacts

@@ -10,7 +10,7 @@ body:
     attributes:
       label: What happened?
       description: Describe what you did, what you expected, and what happened instead.
-      placeholder: "I ran `smart-router migrate --all`. I expected ... but the result was ..."
+      placeholder: "I ran `warden migrate --all`. I expected ... but the result was ..."
     validations:
       required: true
   - type: textarea
@@ -19,8 +19,8 @@ body:
       label: Steps to reproduce
       description: Give the exact commands or MCP calls, and the configuration or registry. Remove your secrets.
       placeholder: |
-        1. smart-router add-mcp ...
-        2. smart-router migrate --all --home /tmp/x
+        1. warden add-mcp ...
+        2. warden migrate --all --home /tmp/x
         3. ...
     validations:
       required: true
@@ -32,7 +32,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: smart-router version or commit
+      label: warden version or commit
       placeholder: "0.1.0 or a commit SHA"
     validations:
       required: true
