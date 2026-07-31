@@ -4,6 +4,7 @@ Pure stdlib module (no ``mcp`` import) mirroring ``registry``/``migrate``: the
 server and CLI are thin wrappers over this. The ``routing`` block lives in the
 JSON registry next to ``mcp_servers`` / ``skill_dirs`` / ``migrations``.
 """
+import pathlib
 from fnmatch import fnmatch
 
 from .registry import save_registry
@@ -21,14 +22,14 @@ DEFAULT_ROUTING = {"mode": "auto", "priority_order": [], "exclude": [], "rules":
 # Config schema: load / save
 # --------------------------------------------------------------------------- #
 def load_routing(reg) -> dict:
-    """Return the registry's routing block with defaults filled (no aliasing)."""
+    """Return the registry's routing block, validated and with defaults filled.
+
+    A stored block is validated the same way ``save_routing`` validates on the
+    write path: a corrupt hand-edited ``routing`` fails loudly with ``ValueError``
+    (consistent with ``config.load_config`` rejecting a non-object config).
+    """
     raw = getattr(reg, "routing", None) or {}
-    return {
-        "mode": raw.get("mode", DEFAULT_ROUTING["mode"]),
-        "priority_order": list(raw.get("priority_order", DEFAULT_ROUTING["priority_order"])),
-        "exclude": list(raw.get("exclude", DEFAULT_ROUTING["exclude"])),
-        "rules": [_copy_rule(r) for r in raw.get("rules", DEFAULT_ROUTING["rules"])],
-    }
+    return _validate_routing(raw)
 
 
 def save_routing(reg, routing) -> None:
@@ -57,6 +58,16 @@ def _deepish(value):
 
 def _is_str_list(value) -> bool:
     return isinstance(value, list) and all(isinstance(x, str) for x in value)
+
+
+def _normalize_ext(value):
+    """Normalize an extension to 'lowercase, no leading dot' (e.g. '.TSX' -> 'tsx').
+
+    Non-string input is returned unchanged so callers can degrade gracefully.
+    """
+    if not isinstance(value, str):
+        return value
+    return value.lstrip(".").lower()
 
 
 def _validate_routing(routing) -> dict:
@@ -101,19 +112,39 @@ def _validate_rule(rule, idx) -> dict:
         if key in rule and not _is_str_list(rule[key]):
             raise ValueError(f"routing.rules[{idx}].{key} must be a list of strings")
 
-    return _copy_rule(rule)
+    out = _copy_rule(rule)
+    if "extension" in out.get("when", {}):
+        out["when"]["extension"] = [_normalize_ext(e) for e in out["when"]["extension"]]
+    return out
 
 
 # --------------------------------------------------------------------------- #
 # Deterministic ranking
 # --------------------------------------------------------------------------- #
+def _context_extension(context):
+    """Derive a normalized extension from ``context``.
+
+    Prefers an explicit ``extension`` (any case, with or without a leading dot);
+    falls back to the suffix of ``file_path``. Returns ``None`` when neither is
+    present so extension rules simply do not match (graceful degrade).
+    """
+    ext = context.get("extension")
+    if ext is None:
+        file_path = context.get("file_path")
+        if isinstance(file_path, str) and file_path:
+            ext = pathlib.Path(file_path).suffix
+    if ext is None:
+        return None
+    return _normalize_ext(ext)
+
+
 def _rule_matches(rule, context) -> bool:
     """A rule matches when context has a listed extension or a glob-matching path."""
     if context is None:
         return False
     when = rule.get("when", {})
     exts = when.get("extension")
-    if exts and context.get("extension") in exts:
+    if exts and _context_extension(context) in exts:
         return True
     glob = when.get("path_glob")
     file_path = context.get("file_path")
@@ -180,7 +211,7 @@ def plan_route(catalog, task, context, routing, mode) -> dict:
 
     candidates.sort(key=lambda c: (-c["score"], _pindex(c["name"]), c["name"]))
 
-    single_option = sum(1 for c in candidates if c["score"] > 0) == 1
+    single_option = len(candidates) == 1
     resolved_mode = mode if mode is not None else routing.get("mode", "auto")
 
     if single_option:

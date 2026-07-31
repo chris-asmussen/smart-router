@@ -117,6 +117,22 @@ class RoutingConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 save_routing(reg, ["not", "a", "dict"])
 
+    def test_load_validates_stored_block(self):
+        # A hand-edited registry with an invalid mode must fail loudly on read.
+        with tempfile.TemporaryDirectory() as tmp:
+            reg = _reg(tmp)
+            reg.routing = {"mode": "weird"}
+            with self.assertRaises(ValueError):
+                load_routing(reg)
+
+    def test_load_normalizes_stored_extension(self):
+        # Stored extensions are normalized on the read path just like on save.
+        with tempfile.TemporaryDirectory() as tmp:
+            reg = _reg(tmp)
+            reg.routing = {"rules": [{"when": {"extension": [".TSX"]}}]}
+            loaded = load_routing(reg)
+            self.assertEqual(loaded["rules"][0]["when"]["extension"], ["tsx"])
+
 
 class PlanRouteTests(unittest.TestCase):
     def test_single_option_no_op(self):
@@ -188,6 +204,29 @@ class PlanRouteTests(unittest.TestCase):
         )
         self.assertEqual(res["chosen"]["name"], "create_issue")
         self.assertTrue(any("prefer" in r for r in res["chosen"]["reasons"]))
+
+    def test_rule_prefer_boosts_via_extension_variants(self):
+        # One rule keyed on ["tsx"] must boost create_issue for each of the
+        # natural caller inputs: dotless, dotted, wrong-case, and file_path.
+        rule = {"when": {"extension": ["tsx"]}, "prefer": ["create_issue"]}
+        for context in (
+            {"extension": "tsx"},
+            {"extension": ".tsx"},
+            {"extension": "TSX"},
+            {"file_path": "src/App.tsx"},
+        ):
+            with self.subTest(context=context):
+                res = plan_route(
+                    _catalog(), "", context,
+                    _routing(rules=[rule]), "auto",
+                )
+                self.assertEqual(res["chosen"]["name"], "create_issue")
+                self.assertTrue(any("prefer" in r for r in res["chosen"]["reasons"]))
+
+    def test_context_none_returns_result_without_error(self):
+        rule = {"when": {"extension": ["tsx"]}, "prefer": ["create_issue"]}
+        res = plan_route(_catalog(), "weather", None, _routing(rules=[rule]), "auto")
+        self.assertEqual(res["chosen"]["name"], "get_weather")
 
     def test_rule_prefer_boosts_via_path_glob(self):
         rule = {"when": {"path_glob": "src/*.tsx"}, "prefer": ["create_issue"]}
