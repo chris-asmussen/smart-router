@@ -7,3 +7,8 @@ warden.config.json
 build/
 dist/
 *.egg-info/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
