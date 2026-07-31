@@ -30,6 +30,46 @@ class CliTests(unittest.TestCase):
             self.assertIn("invalid --env 'KEY'", err.getvalue())
             self.assertIn("KEY=VALUE", err.getvalue())
 
+    def test_doctor_reports_healthy_registry_without_mutating_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            skill_dir = pathlib.Path(tmp) / "skills"
+            skill_dir.mkdir()
+            self.assertEqual(run(["add-mcp", "gh", "--command", "npx"], env=env), 0)
+            self.assertEqual(run(["add-skill", str(skill_dir)], env=env), 0)
+            config_path = pathlib.Path(env["WARDEN_CONFIG"])
+            before = config_path.read_bytes()
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = run(["doctor"], env=env)
+
+            self.assertEqual(rc, 0)
+            self.assertIn(f"registry: {config_path}", out.getvalue())
+            self.assertIn("mcp servers: 1", out.getvalue())
+            self.assertIn("skill dirs: 1", out.getvalue())
+            self.assertIn("registry healthy", out.getvalue())
+            self.assertEqual(config_path.read_bytes(), before)
+
+    def test_doctor_reports_missing_and_duplicate_skill_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            config_path = pathlib.Path(env["WARDEN_CONFIG"])
+            config_path.parent.mkdir(parents=True)
+            missing = pathlib.Path(tmp) / "missing"
+            config_path.write_text(
+                json.dumps({"mcp_servers": {}, "skill_dirs": [str(missing), str(missing)]}),
+                encoding="utf-8",
+            )
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = run(["doctor"], env=env)
+
+            self.assertEqual(rc, 1)
+            self.assertIn(f"problem: missing skill dir: {missing}", out.getvalue())
+            self.assertIn(f"problem: duplicate skill dir: {missing}", out.getvalue())
+
     def _show(self, env):
         out = io.StringIO()
         with redirect_stdout(out):
