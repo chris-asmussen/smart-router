@@ -221,6 +221,48 @@ class CliTests(unittest.TestCase):
             self.assertIn("removed", out)
             self.assertNotIn("warden:begin", (proj / "CLAUDE.md").read_text(encoding="utf-8"))
 
+    def test_auto_start_add_list_remove(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            self.assertEqual(run(["auto-start", "add", "ponytail", "coder"], env=env), 0)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                run(["auto-start", "list"], env=env)
+            self.assertEqual(json.loads(out.getvalue()), ["ponytail", "coder"])
+            self.assertEqual(run(["auto-start", "remove", "coder"], env=env), 0)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                run(["auto-start", "list"], env=env)
+            self.assertEqual(json.loads(out.getvalue()), ["ponytail"])
+
+    def test_auto_start_add_warns_on_unregistered_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["auto-start", "add", "ghost"], env=env)
+            self.assertEqual(rc, 0)  # still added; warning is advisory
+            self.assertIn("not a registered skill", err.getvalue())
+
+    def test_auto_start_add_known_skill_no_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            fixtures = pathlib.Path(__file__).resolve().parent / "fixtures" / "skills"
+            run(["add-skill", str(fixtures)], env=env)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["auto-start", "add", "greeter"], env=env)
+            self.assertEqual(rc, 0)
+            self.assertNotIn("not a registered skill", err.getvalue())
+
+    def test_auto_start_no_subcommand_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["auto-start"], env=env)
+            self.assertNotEqual(rc, 0)
+
     def test_migrate_dry_run_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = build_fake_claude_home(pathlib.Path(tmp) / "h")

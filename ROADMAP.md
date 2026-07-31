@@ -6,6 +6,10 @@ this goal. This document changes over time. Open an issue to propose a change.
 
 ## Shipped
 
+- 0.4.0 — opt-in `auto_start` for Skills. A Skill flagged `auto_start` has its
+  full text folded into warden's MCP server instructions, so the client loads it
+  at every session start. This supports a Skill that only works when it is always
+  active. Set it with `warden auto-start` or the `admin` `set_auto_start` action.
 - 0.3.0 — the `warden init` command. It writes a capability block into your
   agent-instruction file (`CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`), so the
   agent calls `route` first. It asks for the scope (user, project, or local) and
@@ -57,7 +61,11 @@ this goal. This document changes over time. Open an issue to propose a change.
   subcommand instead. The tools today are `search`, `call_tool`, `use_skill`,
   `admin`, and `route`. `route` is the one tool beyond the core four, because
   the agent must call it during a task to select a tool.
-- warden does not copy the automatic skill start of Claude Code.
+- warden does not start Skills automatically from their description, the way
+  Claude Code does. On-demand through `search` or `route` is the default. The one
+  exception is [`auto_start`](#shipped): you opt in a named Skill, and warden
+  loads it at every session start through the server instructions. This is for
+  the few Skills that only work when they are always active.
 
 Refer to the
 [good first issues](https://github.com/chris-asmussen/warden/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)

@@ -13,6 +13,7 @@ from typing import Any
 from mcp.server import MCPServer
 
 from . import __version__
+from . import autostart as _autostart
 from . import migrate as _M
 from . import registry as _R
 from . import routing as _routing
@@ -49,18 +50,63 @@ async def lifespan(_server: MCPServer):
     yield
 
 
+BASE_INSTRUCTIONS = (
+    "Call `search` before assuming a tool or skill is unavailable; "
+    "downstream capabilities are hidden until searched. Use `admin` to "
+    "register or migrate them. Use `route` to pick the best tool or skill "
+    "for a described task; you may pass a light file `context` "
+    "(e.g. {\"file_path\": \"src/App.tsx\"} or {\"extension\": \"tsx\"}) — "
+    "references only, never file contents. `route` returns the pick and "
+    "never executes it."
+)
+
+
+def _startup_instructions() -> str:
+    """Assemble the server instructions, folding in any auto_start Skills.
+
+    Built at import time, not in the lifespan, so the full string is ready when
+    the client reads it at `initialize`. A change to the auto_start set therefore
+    needs a server restart; this matches the MCP protocol, which sends the
+    instructions one time at startup. Reads only local SKILL.md files (no
+    subprocess), and it never lets a bad registry break the import.
+    """
+    try:
+        reg = _R.load_registry()
+        skills = load_skills(reg.skill_dirs)
+        chosen, missing = _autostart.collect_auto_start(skills, reg.auto_start)
+        for name in missing:
+            print(f"warden: auto_start skill '{name}' is not in any registered "
+                  "skill dir; skipped.", file=sys.stderr)
+        text, warnings = _autostart.build_instructions(BASE_INSTRUCTIONS, chosen)
+        for warning in warnings:
+            print(f"warden: {warning}", file=sys.stderr)
+        return text
+    except Exception as exc:  # a bad registry must not stop the server from starting
+        print(f"warden: could not build auto_start instructions ({exc}); "
+              "using base instructions.", file=sys.stderr)
+        return BASE_INSTRUCTIONS
+
+
 mcp = MCPServer(
     "warden",
     version=__version__,
     lifespan=lifespan,
-    instructions="Call `search` before assuming a tool or skill is unavailable; "
-                 "downstream capabilities are hidden until searched. Use `admin` to "
-                 "register or migrate them. Use `route` to pick the best tool or skill "
-                 "for a described task; you may pass a light file `context` "
-                 "(e.g. {\"file_path\": \"src/App.tsx\"} or {\"extension\": \"tsx\"}) — "
-                 "references only, never file contents. `route` returns the pick and "
-                 "never executes it.",
+    instructions=BASE_INSTRUCTIONS,
 )
+
+
+def apply_startup_instructions() -> None:
+    """Fold any auto_start Skills into the live server instructions.
+
+    Called by the serve entry points just before `mcp.run()`, never at import,
+    so `import warden.server` stays free of any registry read (hermetic tests,
+    no import side effect). It must NOT move into the lifespan: the stdio
+    transport builds the initialize options (create_initialization_options,
+    which reads `instructions`) as an argument to `run()`, and `run()` enters the
+    lifespan only after that snapshot. Setting it here, before `mcp.run()`, is
+    read at run time and reaches the client.
+    """
+    mcp._lowlevel_server.instructions = _startup_instructions()
 
 
 @mcp.tool()
@@ -127,8 +173,8 @@ def _sync_config_from(reg) -> None:
 @mcp.tool()
 async def admin(action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """Manage the warden registry. Actions: list, register_mcp, register_skill,
-    unregister, migrate, restore, get_routing, set_routing. `params` carries the
-    action's arguments."""
+    unregister, migrate, restore, get_routing, set_routing, set_auto_start.
+    `params` carries the action's arguments."""
     params = params or {}
     reg = _R.load_registry()
     if action == "list":
@@ -153,6 +199,16 @@ async def admin(action: str, params: dict[str, Any] | None = None) -> dict[str, 
         _R.add_skill_dir(reg, params["path"])
         _R.save_registry(reg); _sync_config_from(reg); await _rebuild_catalog()
         return {"registered": params["path"]}
+    if action == "set_auto_start":
+        # auto_start changes the server `instructions`, which the client reads
+        # once at startup, not the live catalog. So save it, but do not rebuild
+        # the catalog, and tell the caller a restart is needed to load it.
+        name = params["name"]
+        enabled = params.get("enabled", True)
+        changed = _R.set_auto_start(reg, name, enabled)
+        _R.save_registry(reg)
+        return {"auto_start": list(reg.auto_start), "changed": changed,
+                "note": "Restart the MCP client so it reloads warden's instructions."}
     if action == "unregister":
         _R.remove(reg, params["kind"], params["name"])
         _R.save_registry(reg); _sync_config_from(reg); await _rebuild_catalog()
@@ -180,4 +236,5 @@ async def admin(action: str, params: dict[str, Any] | None = None) -> dict[str, 
 
 
 if __name__ == "__main__":
+    apply_startup_instructions()
     mcp.run()

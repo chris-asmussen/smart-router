@@ -32,6 +32,12 @@ def build_parser():
     it.add_argument("--print", dest="print_only", action="store_true", help="Print the block and exit.")
     it.add_argument("--yes", action="store_true", help="Do not prompt; use --scope/--file (non-interactive).")
 
+    asc = sub.add_parser("auto-start")
+    ascsub = asc.add_subparsers(dest="auto_start_cmd")
+    ascsub.add_parser("list")
+    aa = ascsub.add_parser("add"); aa.add_argument("names", nargs="+")
+    arm = ascsub.add_parser("remove"); arm.add_argument("names", nargs="+")
+
     rt = sub.add_parser("routing")
     rtsub = rt.add_subparsers(dest="routing_cmd")
     rtsub.add_parser("show")
@@ -78,7 +84,8 @@ def run(argv, env=None, home=None, now=None, cwd=None) -> int:
     args = build_parser().parse_args(_expand_greedy(list(argv)))
     cmd = args.cmd or "serve"
     if cmd == "serve":
-        from .server import mcp
+        from .server import mcp, apply_startup_instructions
+        apply_startup_instructions()  # fold auto_start Skills in before the client reads instructions
         mcp.run(); return 0
     if cmd == "init":
         init_home = pathlib.Path(env.get("HOME") or pathlib.Path.home())
@@ -117,6 +124,8 @@ def run(argv, env=None, home=None, now=None, cwd=None) -> int:
         print("restored" if ok else f"no migration with id {args.id}"); return 0
     if cmd == "routing":
         return _run_routing(args, reg)
+    if cmd == "auto-start":
+        return _run_auto_start(args, reg)
     return 2
 
 def _dedupe(seq):
@@ -126,6 +135,35 @@ def _dedupe(seq):
         if x not in seen:
             seen.add(x); out.append(x)
     return out
+
+def _run_auto_start(args, reg) -> int:
+    sub = args.auto_start_cmd
+    if sub is None:
+        print("usage: warden auto-start {list,add,remove}", file=sys.stderr)
+        return 2
+    if sub == "list":
+        print(json.dumps(list(reg.auto_start), indent=2)); return 0
+    if sub == "add":
+        from .catalog import load_skills
+        known = {s["name"] for s in load_skills(reg.skill_dirs)}
+        for name in args.names:
+            R.set_auto_start(reg, name, True)
+            if name not in known:
+                print(f"warning: '{name}' is not a registered skill; register its "
+                      "directory first with `warden add-skill <path>`.", file=sys.stderr)
+        R.save_registry(reg)
+        print(f"auto_start: {reg.auto_start}")
+        print("Restart the MCP client so it reloads warden's instructions.")
+        return 0
+    if sub == "remove":
+        for name in args.names:
+            R.set_auto_start(reg, name, False)
+        R.save_registry(reg)
+        print(f"auto_start: {reg.auto_start}")
+        print("Restart the MCP client so it reloads warden's instructions.")
+        return 0
+    return 2
+
 
 def _run_routing(args, reg) -> int:
     from .routing import load_routing, save_routing

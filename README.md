@@ -166,6 +166,9 @@ subcommand is `serve`.
 | `warden routing prefer <name...>` | Adds names to `priority_order`. |
 | `warden routing exclude <name...>` | Adds names to `exclude`. |
 | `warden routing add-rule --ext <e...> \| --glob <g> [--prefer <n...>] [--exclude <n...>]` | Adds a per-file routing rule. |
+| `warden auto-start list` | Prints the Skills that load at every session start. |
+| `warden auto-start add <name...>` | Marks Skills to load at every session start. Restart the client to apply. |
+| `warden auto-start remove <name...>` | Stops the Skills from loading at every session start. |
 
 ```bash
 warden add-mcp github --command npx --args -y @modelcontextprotocol/server-github
@@ -191,6 +194,9 @@ catalog again. Therefore `search` shows the change immediately. The actions are:
 - `get_routing` — returns the routing configuration.
 - `set_routing` — `params: {mode?, priority_order?, exclude?, rules?}`. It
   changes the routing configuration. Refer to [Routing](#routing).
+- `set_auto_start` — `params: {name, enabled?}`. It marks a Skill to load at
+  every session start, or it removes the mark. Refer to
+  [Always-on Skills](#always-on-skills-auto_start).
 
 ## Routing
 
@@ -232,6 +238,39 @@ warden routing exclude legacy-linter
 warden routing add-rule --ext tsx --prefer ts-tools
 warden routing show
 ```
+
+## Always-on Skills (auto_start)
+
+Most Skills stay hidden until `search` surfaces them. This keeps the context
+small. Some Skills only work when they are always active, though. A "think
+before you code" ruleset, for example, must sit in the context before the agent
+writes anything; it cannot wait for a search. `auto_start` is the opt-in for
+that case.
+
+A Skill flagged `auto_start` has its full text folded into warden's MCP server
+instructions. The MCP client reads those instructions one time, at the start of
+each session, so the Skill is always active. warden still stays one MCP server,
+and your other Skills stay on demand.
+
+```bash
+warden add-skill ~/skills/ponytail   # register the skill dir first
+warden auto-start add ponytail       # mark it always-on (by skill name)
+warden auto-start list
+warden auto-start remove ponytail
+```
+
+An agent can do the same with the `admin` `set_auto_start` action.
+
+Keep this set small. Each always-on Skill spends context in every session, which
+is the cost warden otherwise removes. Note these limits:
+
+- **It needs a client restart.** The MCP client reads the instructions only at
+  start. So a new or removed `auto_start` Skill takes effect at the next
+  restart. The on-demand catalog still updates immediately.
+- **The client must inject server instructions.** Claude Code does. Not every
+  MCP client does.
+- **warden caps the size.** If the always-on text gets too long, warden
+  truncates it and prints a warning. Flag fewer Skills.
 
 ## Migration from Claude Code
 
@@ -278,6 +317,10 @@ You get skills behind warden only through `route` or `search`. Claude Code
 cannot start these skills automatically from their description. This is the cost
 to keep them out of the context until you need them. To help, tell the model to
 use warden first.
+
+For a Skill that must be active in every session (for example, a "think before
+you code" ruleset), use [`auto_start`](#always-on-skills-auto_start). That is the
+opt-in override to this limitation, for the few Skills that need it.
 
 **The easy way.** Run `warden init`. It writes the capability block below into
 your agent-instruction file (`CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`). It asks
