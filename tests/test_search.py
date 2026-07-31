@@ -44,6 +44,39 @@ class SearchCatalogTests(unittest.TestCase):
         results = search_catalog(many, "weather", limit=2)
         self.assertLessEqual(len(results), 2)
 
+    def test_multi_token_query_ranks_entry_matching_both_tokens(self):
+        entries = [
+            {"name": "release", "description": "Publish an artifact"},
+            {"name": "build_release", "description": "Build and publish an artifact"},
+        ]
+        results = search_catalog(entries, "build release", limit=5)
+        self.assertEqual(results[0]["name"], "build_release")
+
+    def test_description_matches_are_scored_alongside_name_matches(self):
+        entries = [
+            {"name": "deploy", "description": "Run a command"},
+            {"name": "ship", "description": "Deploy deploy preview builds"},
+        ]
+        results = search_catalog(entries, "deploy", limit=5)
+        self.assertEqual([entry["name"] for entry in results], ["ship", "deploy"])
+
+    def test_equal_scores_keep_catalog_order(self):
+        entries = [
+            {"name": "first", "description": "same"},
+            {"name": "second", "description": "same"},
+        ]
+        results = search_catalog(entries, "same", limit=5)
+        self.assertEqual([entry["name"] for entry in results], ["first", "second"])
+
+    def test_limit_truncates_after_score_ordering(self):
+        entries = [
+            {"name": "low", "description": "match"},
+            {"name": "high", "description": "match match"},
+            {"name": "middle", "description": "match match match"},
+        ]
+        results = search_catalog(entries, "match", limit=2)
+        self.assertEqual([entry["name"] for entry in results], ["middle", "high"])
+
 
 class SkillFrontmatterTests(unittest.TestCase):
     def test_parse_frontmatter(self):
