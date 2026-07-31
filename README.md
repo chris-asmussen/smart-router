@@ -64,12 +64,22 @@ when the agent asks for it.
    items at start. warden does not need a restart, because its catalog
    updates immediately.
 
-5. **Use warden.** Give Claude a usual instruction. When Claude needs a
-   tool, it calls `search`. Then it calls `call_tool` or `use_skill`.
-   warden does not start hidden skills automatically. Add the instruction
-   from [Limitation](#limitation-warden-does-not-start-skills-automatically)
-   to your `CLAUDE.md`. To add or move more items later, an agent calls the
-   `admin` tool, or you use the CLI. To reverse a migration, use
+5. **Tell the agent to use warden (one command).** warden does not start
+   hidden skills automatically. Run `warden init`. It writes a short
+   capability block into your agent-instruction file. The block tells the agent
+   to call `route` or `search` first. The command asks for the scope and the
+   file, and it does not change anything until you confirm.
+   ```bash
+   warden init                       # asks the scope and the file, then writes
+   ```
+   Refer to
+   [Limitation](#limitation-warden-does-not-start-skills-automatically) for the
+   full text and the manual method.
+
+6. **Use warden.** Give Claude a usual instruction. When Claude needs a
+   tool, it calls `route` or `search`. Then it calls `call_tool` or
+   `use_skill`. To add or move more items later, an agent calls the `admin`
+   tool, or you use the CLI. To reverse a migration, use
    `warden restore --id <id>`.
 
 Each section below gives more data: [CLI](#cli),
@@ -145,6 +155,7 @@ subcommand is `serve`.
 | Command | Function |
 | --- | --- |
 | `warden serve` | Runs the MCP server. This is the default. |
+| `warden init [--scope user\|project\|local] [--file CLAUDE.md\|AGENTS.md\|GEMINI.md] [--remove] [--print] [--yes]` | Writes the warden capability block into your agent-instruction file, so the agent calls `route` first. It asks for the scope and the file. Add `--yes` for a non-interactive run. |
 | `warden add-mcp <name> --command <cmd> [--args ...] [--env K=V ...]` | Adds an MCP server to the registry. |
 | `warden add-skill <path>` | Adds a Skill directory to the registry. warden reads its `SKILL.md` files. |
 | `warden list` | Prints the registry as JSON. It shows the MCP servers, the skill directories, and the migration ids. |
@@ -263,18 +274,35 @@ warden restore --id <id> --home /tmp/fake-claude
 
 ### Limitation: warden does not start skills automatically
 
-You get skills behind warden only through `search`. Claude Code cannot
-start these skills automatically from their description. This is the cost to
-keep them out of the context until you need them. To help, tell the model to use
-warden first. This is an example `CLAUDE.md` text:
+You get skills behind warden only through `route` or `search`. Claude Code
+cannot start these skills automatically from their description. This is the cost
+to keep them out of the context until you need them. To help, tell the model to
+use warden first.
+
+**The easy way.** Run `warden init`. It writes the capability block below into
+your agent-instruction file (`CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`). It asks
+for the scope (user, project, or local) and for the file, and it writes only
+after you confirm. A second run replaces the block in place. `warden init
+--remove` strips it again.
+
+```bash
+warden init                 # interactive: asks the scope and the file
+warden init --print         # show the block without writing
+warden init --remove        # remove the block
+```
+
+**The manual way.** Copy this text into your agent-instruction file:
 
 ```markdown
-## Capabilities
+## Capabilities via warden
 
-warden hides many tools and skills to keep them out of the context. Before
-you decide that a capability is not available, call the warden `search`
-with a description of your need. Then call `use_skill` or `call_tool` on a
-result.
+warden keeps many tools and Skills out of your context. Before you decide
+that a capability is not available, use warden first:
+
+1. Call `route` with a short description of the task. Add the current file
+   path if you have one. `route` returns the best tool or Skill to use.
+2. Or call `search` to find a capability by keyword.
+3. Then call `call_tool` or `use_skill` on the result.
 ```
 
 ## Tests

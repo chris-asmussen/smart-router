@@ -6,6 +6,10 @@ this goal. This document changes over time. Open an issue to propose a change.
 
 ## Shipped
 
+- 0.3.0 — the `warden init` command. It writes a capability block into your
+  agent-instruction file (`CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`), so the
+  agent calls `route` first. It asks for the scope (user, project, or local) and
+  the file. It is idempotent, and `--remove` reverses it.
 - 0.2.0 — the `route` tool and the routing configuration. `route` ranks the
   candidate tools and Skills for a task and returns the best one. It does not
   run the tool. The routing block adds `priority_order`, `exclude`, and per-file
