@@ -76,6 +76,8 @@ for the user behavior. Refer to the docstrings for the reason behind each part.
    `feat:`, `fix:`, `docs:`, `test:`, or `refactor:`.
 4. Open the pull request against `main`. Complete the template. Link the issue
    that the pull request closes.
+5. Do not change the version. The maintainer sets the version in
+   `pyproject.toml` and `warden/__init__.py` at release time.
 
 We mark good first contributions with the label
 [`good first issue`](https://github.com/chris-asmussen/warden/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).

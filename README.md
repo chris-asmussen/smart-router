@@ -327,3 +327,9 @@ installed, this test skips automatically.
   the subprocess becomes a measured problem.
 - The configuration is plain JSON. It does not need a YAML dependency for two
   keys.
+
+## Support
+
+If warden is useful to you, add a star to the repository. A star helps other
+people find the project. It is optional. It is not a condition to use warden or
+to contribute.
