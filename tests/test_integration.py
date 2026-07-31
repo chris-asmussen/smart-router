@@ -67,7 +67,7 @@ class SmartRouterIntegrationTests(unittest.TestCase):
                 tools = await client.list_tools()
                 self.assertEqual(
                     sorted(t.name for t in tools.tools),
-                    ["admin", "call_tool", "search", "use_skill"],
+                    ["admin", "call_tool", "route", "search", "use_skill"],
                 )
 
                 # search surfaces the downstream tool
@@ -90,6 +90,50 @@ class SmartRouterIntegrationTests(unittest.TestCase):
                 # use_skill returns the full SKILL.md body
                 skill = (await client.call_tool("use_skill", {"name": "greeter"})).structured_content["result"]
                 self.assertIn("Say hello", skill)
+
+    def test_route_ranks_and_never_executes(self):
+        asyncio.run(self._route())
+
+    async def _route(self):
+        from mcp import Client, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = pathlib.Path(tmp) / "config.json"
+            cfg.write_text(json.dumps({
+                "mcp_servers": {"echo": {
+                    "command": sys.executable,
+                    "args": [str(FIXTURES / "echo_server.py")],
+                    "env": {},
+                }},
+                "skill_dirs": [str(FIXTURES / "skills")],
+                "routing": {"mode": "auto", "priority_order": [],
+                            "exclude": [], "rules": []},
+            }))
+            env = dict(os.environ)
+            env["SMART_ROUTER_CONFIG"] = str(cfg)
+            env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+            params = StdioServerParameters(
+                command=sys.executable, args=["-m", "smart_router"], env=env, cwd=tmp)
+
+            async with Client(stdio_client(params)) as client:
+                tools = await client.list_tools()
+                self.assertIn("route", [t.name for t in tools.tools])
+
+                # Single-option: only the echo tool matches "echo".
+                res = (await client.call_tool("route", {"task": "echo"})).structured_content
+                self.assertTrue(res["single_option"])
+                self.assertEqual(res["chosen"]["name"], "echo")
+                self.assertEqual(len(res["candidates"]), 1)
+
+                # Ranking: both tool and skill match "greet echo"; both survive
+                # and auto mode names a chosen pick reflecting the ranking.
+                res = (await client.call_tool("route", {"task": "greet echo"})).structured_content
+                names = [c["name"] for c in res["candidates"]]
+                self.assertIn("echo", names)
+                self.assertIn("greeter", names)
+                self.assertFalse(res["single_option"])
+                self.assertEqual(res["chosen"]["name"], res["candidates"][0]["name"])
 
     def test_admin_register_mcp_is_live(self):
         asyncio.run(self._admin())

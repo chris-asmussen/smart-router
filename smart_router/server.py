@@ -1,10 +1,10 @@
 """smart-router MCP server.
 
-Exposes exactly 3 tools to the calling agent — search, call_tool, use_skill —
-regardless of how many downstream MCP servers or Skills are configured. The
-full catalog is built once at startup (in the server lifespan) and kept
-server-side; nothing else enters the model's context window until `search`
-surfaces it.
+Exposes a small, fixed set of tools to the calling agent — search, call_tool,
+use_skill, admin, route — regardless of how many downstream MCP servers or
+Skills are configured. The full catalog is built once at startup (in the server
+lifespan) and kept server-side; nothing else enters the model's context window
+until `search` surfaces it.
 """
 import sys
 from contextlib import asynccontextmanager
@@ -15,6 +15,7 @@ from mcp.server import MCPServer
 from . import __version__
 from . import migrate as _M
 from . import registry as _R
+from . import routing as _routing
 from .catalog import build_tool_catalog, load_skills
 from .claude_env import ClaudeEnv as _ClaudeEnv
 from .downstream import call_downstream_tool
@@ -54,7 +55,11 @@ mcp = MCPServer(
     lifespan=lifespan,
     instructions="Call `search` before assuming a tool or skill is unavailable; "
                  "downstream capabilities are hidden until searched. Use `admin` to "
-                 "register or migrate them.",
+                 "register or migrate them. Use `route` to pick the best tool or skill "
+                 "for a described task; you may pass a light file `context` "
+                 "(e.g. {\"file_path\": \"src/App.tsx\"} or {\"extension\": \"tsx\"}) — "
+                 "references only, never file contents. `route` returns the pick and "
+                 "never executes it.",
 )
 
 
@@ -87,6 +92,21 @@ def use_skill(name: str) -> str:
         if skill["name"] == name:
             return skill["content"]
     raise ValueError(f"Unknown skill: {name}")
+
+
+@mcp.tool()
+def route(task: str, context: dict[str, Any] | None = None,
+          mode: str | None = None) -> dict[str, Any]:
+    """Pick the best tool or skill for `task`, ranked by server-side routing config.
+
+    Returns the selection (`chosen` / `candidates`) and NEVER executes anything —
+    invoke the pick yourself via `call_tool` or `use_skill`. `context` is optional
+    light file metadata (`file_path` / `extension`, references only); `mode`
+    overrides the configured auto/ask default for this call.
+    """
+    reg = _R.load_registry()
+    routing = _routing.load_routing(reg)
+    return _routing.plan_route(CATALOG, task, context, routing, mode)
 
 
 async def _rebuild_catalog() -> None:

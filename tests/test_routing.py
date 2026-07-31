@@ -10,7 +10,7 @@ import unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from smart_router.registry import Registry, load_registry
-from smart_router.routing import load_routing, plan_route, save_routing
+from smart_router.routing import load_routing, plan_route, render_route, save_routing
 
 
 def _reg(tmp):
@@ -283,6 +283,37 @@ class PlanRouteTests(unittest.TestCase):
         catalog = [{"type": "skill", "name": "pdf", "description": "handle pdf", "input_schema": {}}]
         res = plan_route(catalog, "pdf", None, _routing(), "auto")
         self.assertNotIn("server", res["chosen"])
+
+
+class RenderRouteTests(unittest.TestCase):
+    def test_auto_shows_chosen_and_reasons(self):
+        res = plan_route(
+            _catalog(), "weather", None,
+            _routing(priority_order=["create_issue"]), "auto",
+        )
+        text = render_route(res)
+        self.assertIn("auto", text)
+        self.assertIn("get_weather", text)
+        # a reason string surfaces in the human summary
+        self.assertIn("text score", text)
+
+    def test_ask_shows_no_chosen(self):
+        res = plan_route(
+            _catalog(), "weather", None,
+            _routing(mode="ask", priority_order=["create_issue"]), None,
+        )
+        text = render_route(res)
+        self.assertIn("none", text.lower())
+
+    def test_single_option_labeled(self):
+        res = plan_route(_catalog(), "weather", None, _routing(), None)
+        self.assertIn("single", render_route(res).lower())
+
+    def test_empty_candidates_no_crash(self):
+        res = plan_route(_catalog(), "zzz-nonexistent", None, _routing(), "auto")
+        text = render_route(res)
+        self.assertIsInstance(text, str)
+        self.assertIn("none", text.lower())
 
 
 if __name__ == "__main__":

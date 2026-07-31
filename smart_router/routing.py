@@ -230,3 +230,38 @@ def plan_route(catalog, task, context, routing, mode) -> dict:
         "chosen": chosen,
         "candidates": result_candidates,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Human-readable rendering (dry inspection / CLI)
+# --------------------------------------------------------------------------- #
+def _render_candidate(cand) -> str:
+    name = cand.get("name", "")
+    server = cand.get("server")
+    label = f"{server}/{name}" if server else name
+    reasons = cand.get("reasons") or []
+    tail = f" — {'; '.join(reasons)}" if reasons else ""
+    return f"{label} (score {cand.get('score')}){tail}"
+
+
+def render_route(result) -> str:
+    """Render a ``plan_route`` result as a short human-readable summary.
+
+    Pure and side-effect free; mirrors ``migrate.render_plan`` for dry inspection.
+    """
+    header = f"mode: {result.get('mode', 'auto')}"
+    if result.get("single_option"):
+        header += " (single option)"
+    lines = [header]
+
+    chosen = result.get("chosen")
+    lines.append(f"chosen: {_render_candidate(chosen)}" if chosen else "chosen: none")
+
+    candidates = result.get("candidates") or []
+    if candidates:
+        lines.append("candidates:")
+        lines.extend(f"  {i}. {_render_candidate(c)}" for i, c in enumerate(candidates, 1))
+    else:
+        lines.append("candidates: none")
+
+    return "\n".join(lines)
