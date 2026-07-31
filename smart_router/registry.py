@@ -10,18 +10,21 @@ class Registry:
     skill_dirs: list[str] = field(default_factory=list)
     migrations: list[dict] = field(default_factory=list)
     path: pathlib.Path = field(default_factory=lambda: writable_config_path())
+    routing: dict = field(default_factory=dict)
 
 def load_registry(path=None) -> Registry:
     p = writable_config_path() if path is None else pathlib.Path(path)
     if not p.exists():
         return Registry(path=p)
     d = json.loads(p.read_text(encoding="utf-8"))
-    return Registry(d.get("mcp_servers", {}), d.get("skill_dirs", []), d.get("migrations", []), p)
+    return Registry(d.get("mcp_servers", {}), d.get("skill_dirs", []),
+                    d.get("migrations", []), p, d.get("routing", {}))
 
 def save_registry(reg: Registry) -> None:
     reg.path.parent.mkdir(parents=True, exist_ok=True)
     reg.path.write_text(json.dumps(
-        {"mcp_servers": reg.mcp_servers, "skill_dirs": reg.skill_dirs, "migrations": reg.migrations},
+        {"mcp_servers": reg.mcp_servers, "skill_dirs": reg.skill_dirs,
+         "migrations": reg.migrations, "routing": reg.routing},
         indent=2), encoding="utf-8")
 
 def add_mcp_server(reg, name, command, args=None, env=None) -> bool:
