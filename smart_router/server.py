@@ -127,11 +127,24 @@ def _sync_config_from(reg) -> None:
 @mcp.tool()
 async def admin(action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """Manage the smart-router registry. Actions: list, register_mcp, register_skill,
-    unregister, migrate, restore. `params` carries the action's arguments."""
+    unregister, migrate, restore, get_routing, set_routing. `params` carries the
+    action's arguments."""
     params = params or {}
     reg = _R.load_registry()
     if action == "list":
         return _R.summary(reg)
+    if action == "get_routing":
+        return _routing.load_routing(reg)
+    if action == "set_routing":
+        # Merge the provided keys onto the current block so partial updates work;
+        # save_routing validates + persists. No catalog rebuild: routing config
+        # does not change the tool/skill catalog itself.
+        block = _routing.load_routing(reg)
+        for key in ("mode", "priority_order", "exclude", "rules"):
+            if key in params:
+                block[key] = params[key]
+        _routing.save_routing(reg, block)
+        return _routing.load_routing(reg)
     if action == "register_mcp":
         _R.add_mcp_server(reg, params["name"], params["command"], params.get("args"), params.get("env"))
         _R.save_registry(reg); _sync_config_from(reg); await _rebuild_catalog()

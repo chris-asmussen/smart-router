@@ -164,5 +164,36 @@ class SmartRouterIntegrationTests(unittest.TestCase):
                 self.assertIn("echo", listing["mcp_servers"])
 
 
+    def test_admin_routing_roundtrips(self):
+        asyncio.run(self._admin_routing())
+
+    async def _admin_routing(self):
+        from mcp import Client, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = pathlib.Path(tmp) / "config.json"
+            cfg.write_text(json.dumps({"mcp_servers": {}, "skill_dirs": []}))
+            env = dict(os.environ)
+            env["SMART_ROUTER_CONFIG"] = str(cfg)
+            env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+            params = StdioServerParameters(
+                command=sys.executable, args=["-m", "smart_router"], env=env, cwd=tmp)
+
+            async with Client(stdio_client(params)) as client:
+                block = {
+                    "mode": "ask",
+                    "priority_order": ["gh.create_issue"],
+                    "exclude": ["weather.get"],
+                    "rules": [{"when": {"extension": ["tsx"]}, "prefer": ["gh.create_issue"]}],
+                }
+                await client.call_tool("admin", {"action": "set_routing", "params": block})
+                got = (await client.call_tool("admin", {"action": "get_routing"})).structured_content
+                self.assertEqual(got["mode"], "ask")
+                self.assertEqual(got["priority_order"], ["gh.create_issue"])
+                self.assertEqual(got["exclude"], ["weather.get"])
+                self.assertEqual(got["rules"][0]["when"]["extension"], ["tsx"])
+
+
 if __name__ == "__main__":
     unittest.main()

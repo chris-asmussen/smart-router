@@ -30,6 +30,65 @@ class CliTests(unittest.TestCase):
             self.assertIn("invalid --env 'KEY'", err.getvalue())
             self.assertIn("KEY=VALUE", err.getvalue())
 
+    def _show(self, env):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            run(["routing", "show"], env=env)
+        return json.loads(out.getvalue())
+
+    def test_routing_set_mode_then_show(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            self.assertEqual(run(["routing", "set-mode", "ask"], env=env), 0)
+            self.assertEqual(self._show(env)["mode"], "ask")
+
+    def test_routing_prefer_exclude_add_rule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            self.assertEqual(run(["routing", "prefer", "gh.create_issue", "weather.get"], env=env), 0)
+            self.assertEqual(run(["routing", "exclude", "weather.get"], env=env), 0)
+            self.assertEqual(
+                run(["routing", "add-rule", "--ext", "tsx", "jsx", "--prefer", "gh.create_issue"], env=env), 0)
+            block = self._show(env)
+            self.assertEqual(block["priority_order"], ["gh.create_issue", "weather.get"])
+            self.assertEqual(block["exclude"], ["weather.get"])
+            self.assertEqual(len(block["rules"]), 1)
+            self.assertEqual(block["rules"][0]["when"]["extension"], ["tsx", "jsx"])
+            self.assertEqual(block["rules"][0]["prefer"], ["gh.create_issue"])
+
+    def test_routing_prefer_dedupes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            run(["routing", "prefer", "a", "b"], env=env)
+            run(["routing", "prefer", "a", "c"], env=env)
+            self.assertEqual(self._show(env)["priority_order"], ["a", "b", "c"])
+
+    def test_routing_add_rule_glob(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            self.assertEqual(
+                run(["routing", "add-rule", "--glob", "src/*.tsx", "--exclude", "weather.get"], env=env), 0)
+            rule = self._show(env)["rules"][0]
+            self.assertEqual(rule["when"]["path_glob"], "src/*.tsx")
+            self.assertEqual(rule["exclude"], ["weather.get"])
+
+    def test_routing_add_rule_requires_selector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["routing", "add-rule", "--prefer", "x"], env=env)
+            self.assertNotEqual(rc, 0)
+            self.assertIn("--ext", err.getvalue())
+
+    def test_routing_no_subcommand_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["routing"], env=env)
+            self.assertNotEqual(rc, 0)
+
     def test_migrate_dry_run_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = build_fake_claude_home(pathlib.Path(tmp) / "h")

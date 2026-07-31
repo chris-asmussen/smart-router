@@ -21,6 +21,20 @@ def build_parser():
     r = sub.add_parser("restore"); r.add_argument("--id", required=True)
     r.add_argument("--home", default=None,
                    help="Operate on this Claude home instead of the real ~/.claude (safe testing).")
+
+    rt = sub.add_parser("routing")
+    rtsub = rt.add_subparsers(dest="routing_cmd")
+    rtsub.add_parser("show")
+    sm = rtsub.add_parser("set-mode"); sm.add_argument("mode", choices=["auto", "ask"])
+    pf = rtsub.add_parser("prefer")
+    pf.add_argument("names", nargs="+", help="append to priority_order (order-preserving, deduped)")
+    ex = rtsub.add_parser("exclude")
+    ex.add_argument("names", nargs="+", help="append to exclude (order-preserving, deduped)")
+    ar = rtsub.add_parser("add-rule")
+    ar.add_argument("--ext", nargs="*", default=None)
+    ar.add_argument("--glob", default=None)
+    ar.add_argument("--prefer", nargs="*", default=None)
+    ar.add_argument("--exclude", nargs="*", default=None)
     return p
 
 def _now():
@@ -87,6 +101,52 @@ def run(argv, env=None, home=None, now=None) -> int:
     if cmd == "restore":
         ok = M.restore(cenv, reg, args.id)
         print("restored" if ok else f"no migration with id {args.id}"); return 0
+    if cmd == "routing":
+        return _run_routing(args, reg)
+    return 2
+
+def _dedupe(seq):
+    """Order-preserving de-duplication (for priority_order / exclude appends)."""
+    seen, out = set(), []
+    for x in seq:
+        if x not in seen:
+            seen.add(x); out.append(x)
+    return out
+
+def _run_routing(args, reg) -> int:
+    from .routing import load_routing, save_routing
+    sub = args.routing_cmd
+    if sub is None:
+        print("usage: smart-router routing {show,set-mode,prefer,exclude,add-rule}", file=sys.stderr)
+        return 2
+    block = load_routing(reg)  # validated, defaults filled
+    if sub == "show":
+        print(json.dumps(block, indent=2)); return 0
+    if sub == "set-mode":
+        block["mode"] = args.mode
+        save_routing(reg, block); print(f"routing mode: {args.mode}"); return 0
+    if sub == "prefer":
+        block["priority_order"] = _dedupe(block["priority_order"] + args.names)
+        save_routing(reg, block); print(f"priority_order: {block['priority_order']}"); return 0
+    if sub == "exclude":
+        block["exclude"] = _dedupe(block["exclude"] + args.names)
+        save_routing(reg, block); print(f"exclude: {block['exclude']}"); return 0
+    if sub == "add-rule":
+        if not args.ext and not args.glob:
+            print("routing add-rule requires --ext <e...> or --glob <g>", file=sys.stderr)
+            return 2
+        when = {}
+        if args.ext:
+            when["extension"] = args.ext
+        if args.glob:
+            when["path_glob"] = args.glob
+        rule = {"when": when}
+        if args.prefer:
+            rule["prefer"] = args.prefer
+        if args.exclude:
+            rule["exclude"] = args.exclude
+        block["rules"].append(rule)
+        save_routing(reg, block); print("added routing rule"); return 0
     return 2
 
 def main() -> None:
