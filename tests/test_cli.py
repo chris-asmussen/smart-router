@@ -81,6 +81,48 @@ class CliTests(unittest.TestCase):
             self.assertNotEqual(rc, 0)
             self.assertIn("--ext", err.getvalue())
 
+    def test_routing_add_rule_empty_ext_flag_errors(self):
+        # Fix 1: `--ext` present with no values must NOT be silently dropped, even
+        # when another selector (--glob) is set. It is a hard error (exit 2).
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["routing", "add-rule", "--ext", "--glob", "src/*.tsx", "--prefer", "x"], env=env)
+            self.assertEqual(rc, 2)
+            self.assertIn("--ext", err.getvalue())
+            # Nothing should have been stored.
+            self.assertEqual(self._show(env)["rules"], [])
+
+    def test_routing_add_rule_no_selector_errors(self):
+        # Fix 1: neither --ext nor --glob provided -> exit 2.
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["routing", "add-rule"], env=env)
+            self.assertEqual(rc, 2)
+            self.assertEqual(self._show(env)["rules"], [])
+
+    def test_routing_add_rule_ext_prefer_still_works(self):
+        # Fix 1 regression guard: a normal add-rule with a real --ext still works.
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            self.assertEqual(
+                run(["routing", "add-rule", "--ext", "tsx", "--prefer", "a"], env=env), 0)
+            rule = self._show(env)["rules"][0]
+            self.assertEqual(rule["when"]["extension"], ["tsx"])
+            self.assertEqual(rule["prefer"], ["a"])
+
+    def test_routing_add_rule_ext_normalized_on_store(self):
+        # Fix 2: `.TSX JSX` round-trips to normalized ["tsx", "jsx"] in storage.
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            self.assertEqual(
+                run(["routing", "add-rule", "--ext", ".TSX", "JSX", "--prefer", "a"], env=env), 0)
+            rule = self._show(env)["rules"][0]
+            self.assertEqual(rule["when"]["extension"], ["tsx", "jsx"])
+
     def test_routing_no_subcommand_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = self._env(tmp)

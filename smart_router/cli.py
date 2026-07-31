@@ -132,13 +132,18 @@ def _run_routing(args, reg) -> int:
         block["exclude"] = _dedupe(block["exclude"] + args.names)
         save_routing(reg, block); print(f"exclude: {block['exclude']}"); return 0
     if sub == "add-rule":
-        if not args.ext and not args.glob:
+        # `--ext` with no values (args.ext == []) means the flag was typed but
+        # empty; treat it as an error rather than silently dropping the selector.
+        if args.ext is not None and len(args.ext) == 0:
+            print("routing add-rule: --ext requires at least one extension", file=sys.stderr)
+            return 2
+        if args.ext is None and args.glob is None:
             print("routing add-rule requires --ext <e...> or --glob <g>", file=sys.stderr)
             return 2
         when = {}
         if args.ext:
             when["extension"] = args.ext
-        if args.glob:
+        if args.glob is not None:
             when["path_glob"] = args.glob
         rule = {"when": when}
         if args.prefer:

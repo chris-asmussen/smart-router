@@ -133,6 +133,23 @@ class RoutingConfigTests(unittest.TestCase):
             loaded = load_routing(reg)
             self.assertEqual(loaded["rules"][0]["when"]["extension"], ["tsx"])
 
+    def test_rejected_save_leaves_persisted_block_unchanged(self):
+        # Fix 2: a save_routing that fails validation (e.g. mode:"weird") must not
+        # mutate the previously-persisted routing block on disk.
+        with tempfile.TemporaryDirectory() as tmp:
+            reg = _reg(tmp)
+            good = {"mode": "ask", "priority_order": ["gh.create_issue"]}
+            save_routing(reg, good)
+            before = load_routing(load_registry(reg.path))
+
+            with self.assertRaises(ValueError):
+                save_routing(reg, {"mode": "weird"})
+
+            after = load_routing(load_registry(reg.path))
+            self.assertEqual(after, before)
+            self.assertEqual(after["mode"], "ask")
+            self.assertEqual(after["priority_order"], ["gh.create_issue"])
+
 
 class PlanRouteTests(unittest.TestCase):
     def test_single_option_no_op(self):
