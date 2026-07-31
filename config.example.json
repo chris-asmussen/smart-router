@@ -1,0 +1,13 @@
+{
+  "_comment": "The structure of the registry. You do not normally write this manually. Use `smart-router add-mcp`, `add-skill`, or `migrate`, or the `admin` MCP tool. Writes go to $SMART_ROUTER_CONFIG, $SMART_ROUTER_HOME/config.json, or ~/.config/smart-router/config.json. Writes do not go to the current directory. smart-router ignores an unknown key like this one.",
+  "mcp_servers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {}
+    }
+  },
+  "skill_dirs": [
+    "./skills"
+  ]
+}

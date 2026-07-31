@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-router"
+version = "0.1.0"
+description = "An MCP server that fronts many downstream MCP servers and Skills behind just three tools, keeping the agent's context window small."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Chris Asmussen", email = "157303523+chris-asmussen@users.noreply.github.com" }]
+keywords = ["mcp", "model-context-protocol", "agent", "tools", "router"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = ["mcp>=2"]
+
+[project.urls]
+Homepage = "https://github.com/chris-asmussen/smart-router"
+Repository = "https://github.com/chris-asmussen/smart-router"
+Issues = "https://github.com/chris-asmussen/smart-router/issues"
+
+[project.scripts]
+smart-router = "smart_router.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["smart_router*"]

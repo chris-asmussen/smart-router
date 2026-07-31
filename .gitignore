@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+smart-router.config.json
+.worktrees/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

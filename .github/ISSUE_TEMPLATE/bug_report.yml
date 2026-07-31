@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a function that does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for the time to report a bug. For a security problem, use SECURITY.md. Do not open a public issue for a security problem.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe what you did, what you expected, and what happened instead.
+      placeholder: "I ran `smart-router migrate --all`. I expected ... but the result was ..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Give the exact commands or MCP calls, and the configuration or registry. Remove your secrets.
+      placeholder: |
+        1. smart-router add-mcp ...
+        2. smart-router migrate --all --home /tmp/x
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or traceback
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: smart-router version or commit
+      placeholder: "0.1.0 or a commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.11"
+    validations:
+      required: true
+  - type: input
+    id: mcp
+    attributes:
+      label: mcp version
+      placeholder: "the result of: pip show mcp | grep Version"

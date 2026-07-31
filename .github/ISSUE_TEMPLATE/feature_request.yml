@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest a new function or an improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use or the difficulty. What do you try to do that is hard now?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe what you want. If it adds a model-facing tool, give the reason that an `admin` action or a CLI subcommand is not sufficient. The project keeps the set of tools small.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other options that you considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This change keeps the core in the standard library (no new dependency), or I give the reason for a dependency.
+        - label: I will help to implement this change.
