@@ -1,7 +1,7 @@
 import pathlib, sys, tempfile, unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from warden.registry import (Registry, load_registry, save_registry,
-    add_mcp_server, add_skill_dir, remove, summary)
+    add_mcp_server, add_skill_dir, remove, summary, set_auto_start)
 
 class RegistryTests(unittest.TestCase):
     def _reg(self, tmp):
@@ -39,3 +39,23 @@ class RegistryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             reg = load_registry(pathlib.Path(tmp) / "nope.json")
             self.assertEqual(reg.mcp_servers, {})
+            self.assertEqual(reg.auto_start, [])
+
+    def test_set_auto_start_toggles_without_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            reg = self._reg(tmp)
+            self.assertTrue(set_auto_start(reg, "ponytail", True))
+            self.assertFalse(set_auto_start(reg, "ponytail", True))  # already on: no change
+            self.assertEqual(reg.auto_start, ["ponytail"])
+            self.assertTrue(set_auto_start(reg, "ponytail", False))
+            self.assertFalse(set_auto_start(reg, "ponytail", False))  # already off
+            self.assertEqual(reg.auto_start, [])
+
+    def test_auto_start_roundtrip_and_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            reg = self._reg(tmp)
+            set_auto_start(reg, "ponytail", True)
+            save_registry(reg)
+            reg2 = load_registry(reg.path)
+            self.assertEqual(reg2.auto_start, ["ponytail"])
+            self.assertEqual(summary(reg2)["auto_start"], ["ponytail"])

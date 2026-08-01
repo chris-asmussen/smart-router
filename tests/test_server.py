@@ -61,12 +61,16 @@ class ServerToolTests(unittest.TestCase):
         self._config_snapshot = dict(server.CONFIG)
         self._skills_snapshot = list(server.SKILLS)
         self._catalog_snapshot = list(server.CATALOG)
+        # apply_startup_instructions() mutates the live server instructions;
+        # snapshot so one test's auto_start does not bleed into later assertions.
+        self._instructions_snapshot = server.mcp._lowlevel_server.instructions
 
         def _restore():
             server.CONFIG.clear()
             server.CONFIG.update(self._config_snapshot)
             server.SKILLS[:] = self._skills_snapshot
             server.CATALOG[:] = self._catalog_snapshot
+            server.mcp._lowlevel_server.instructions = self._instructions_snapshot
 
         self.addCleanup(_restore)
 
@@ -154,6 +158,57 @@ class ServerToolTests(unittest.TestCase):
         self.assertEqual(got["mode"], "ask")
         got2 = asyncio.run(server.admin("get_routing"))
         self.assertEqual(got2["priority_order"], ["gh.x"])
+
+    # -- admin: set_auto_start (persists, restart-gated, no live rebuild) --- #
+    def test_admin_set_auto_start_persists_and_notes_restart(self):
+        server = self.server
+        self.cfg.write_text(json.dumps({"mcp_servers": {}, "skill_dirs": []}))
+        got = asyncio.run(server.admin("set_auto_start", {"name": "ponytail"}))
+        self.assertEqual(got["auto_start"], ["ponytail"])
+        self.assertTrue(got["changed"])
+        self.assertIn("Restart", got["note"])
+        # Persisted to the temp config, and reversible.
+        self.assertEqual(json.loads(self.cfg.read_text())["auto_start"], ["ponytail"])
+        off = asyncio.run(server.admin("set_auto_start", {"name": "ponytail", "enabled": False}))
+        self.assertEqual(off["auto_start"], [])
+
+    # -- _startup_instructions folds auto_start skill text into instructions - #
+    def test_startup_instructions_include_auto_start_skill(self):
+        server = self.server
+        self.cfg.write_text(json.dumps({
+            "mcp_servers": {}, "skill_dirs": [str(FIXTURES / "skills")],
+            "auto_start": ["greeter"]}))
+        text = server._startup_instructions()
+        self.assertTrue(text.startswith(server.BASE_INSTRUCTIONS))
+        self.assertIn("--- Skill: greeter ---", text)
+
+    def test_startup_instructions_base_only_when_no_auto_start(self):
+        server = self.server
+        self.cfg.write_text(json.dumps({"mcp_servers": {}, "skill_dirs": []}))
+        self.assertEqual(server._startup_instructions(), server.BASE_INSTRUCTIONS)
+
+    def test_apply_startup_instructions_updates_live_getter(self):
+        # The check that matters: the object the client reads (mcp.instructions),
+        # not just the builder, holds the folded auto_start text after apply.
+        server = self.server
+        self.cfg.write_text(json.dumps({
+            "mcp_servers": {}, "skill_dirs": [str(FIXTURES / "skills")],
+            "auto_start": ["greeter"]}))
+        server.apply_startup_instructions()
+        self.assertIn("--- Skill: greeter ---", server.mcp.instructions)
+
+    def test_startup_instructions_warns_on_missing_auto_start_name(self):
+        server = self.server
+        self.cfg.write_text(json.dumps({
+            "mcp_servers": {}, "skill_dirs": [str(FIXTURES / "skills")],
+            "auto_start": ["ghost"]}))  # no such skill
+        self.assertEqual(server._startup_instructions(), server.BASE_INSTRUCTIONS)
+
+    def test_startup_instructions_survives_bad_registry(self):
+        server = self.server
+        self.cfg.write_text("{ not valid json")
+        # A malformed registry must not stop the server from starting.
+        self.assertEqual(server._startup_instructions(), server.BASE_INSTRUCTIONS)
 
     def test_admin_unknown_action_raises(self):
         server = self.server

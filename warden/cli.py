@@ -23,6 +23,22 @@ def build_parser():
     r.add_argument("--home", default=None,
                    help="Operate on this Claude home instead of the real ~/.claude (safe testing).")
 
+    from .agent_files import SCOPES, AGENT_FILES
+    it = sub.add_parser("init")
+    it.add_argument("--scope", choices=list(SCOPES), default=None,
+                    help="user (~/.claude/CLAUDE.md), project (./CLAUDE.md), or local (./CLAUDE.local.md).")
+    it.add_argument("--file", dest="agent_file", choices=list(AGENT_FILES), default=None,
+                    help="Which agent-instruction file to write. Default CLAUDE.md.")
+    it.add_argument("--remove", action="store_true", help="Remove the warden block instead of adding it.")
+    it.add_argument("--print", dest="print_only", action="store_true", help="Print the block and exit.")
+    it.add_argument("--yes", action="store_true", help="Do not prompt; use --scope/--file (non-interactive).")
+
+    asc = sub.add_parser("auto-start")
+    ascsub = asc.add_subparsers(dest="auto_start_cmd")
+    ascsub.add_parser("list")
+    aa = ascsub.add_parser("add"); aa.add_argument("names", nargs="+")
+    arm = ascsub.add_parser("remove"); arm.add_argument("names", nargs="+")
+
     rt = sub.add_parser("routing")
     rtsub = rt.add_subparsers(dest="routing_cmd")
     rtsub.add_parser("show")
@@ -62,15 +78,20 @@ def _expand_greedy(argv):
             out.append(tok); i += 1
     return out
 
-def run(argv, env=None, home=None, now=None) -> int:
-    import os
+def run(argv, env=None, home=None, now=None, cwd=None) -> int:
+    import os, pathlib
     env = os.environ if env is None else env
     now = now or _now
     args = build_parser().parse_args(_expand_greedy(list(argv)))
     cmd = args.cmd or "serve"
     if cmd == "serve":
-        from .server import mcp
+        from .server import mcp, apply_startup_instructions
+        apply_startup_instructions()  # fold auto_start Skills in before the client reads instructions
         mcp.run(); return 0
+    if cmd == "init":
+        init_home = pathlib.Path(env.get("HOME") or pathlib.Path.home())
+        init_cwd = pathlib.Path(cwd) if cwd is not None else pathlib.Path.cwd()
+        return _run_init(args, init_home, init_cwd)
     reg = R.load_registry(writable_config_path(env=env))  # writes persist to config_home, never CWD
     # A CLI --home flag (migrate/restore) overrides the function-param home; both
     # default to None -> the real ~/.claude. Lets users test migration against a
@@ -96,10 +117,14 @@ def run(argv, env=None, home=None, now=None) -> int:
         for path in report["missing_skill_dirs"]:
             print(f"problem: missing skill dir: {path}")
         for path in report["duplicate_skill_dirs"]:
-            print(f"problem: duplicate skill dir: {path}")
-        problems = report["missing_skill_dirs"] or report["duplicate_skill_dirs"]
-        if not problems:
+            print(f"warning: duplicate skill dir: {path}")
+        for name in report["missing_auto_start_skills"]:
+            print(f"problem: auto_start skill is not registered: {name}")
+        problems = report["missing_skill_dirs"] or report["missing_auto_start_skills"]
+        if not problems and not report["duplicate_skill_dirs"]:
             print("registry healthy")
+        elif not problems:
+            print("registry healthy (warnings only)")
         return 1 if problems else 0
     if cmd == "migrate":
         targets = {"mcp": "all" if args.all else args.mcp,
@@ -117,6 +142,8 @@ def run(argv, env=None, home=None, now=None) -> int:
         print("restored" if ok else f"no migration with id {args.id}"); return 0
     if cmd == "routing":
         return _run_routing(args, reg)
+    if cmd == "auto-start":
+        return _run_auto_start(args, reg)
     return 2
 
 def _dedupe(seq):
@@ -126,6 +153,35 @@ def _dedupe(seq):
         if x not in seen:
             seen.add(x); out.append(x)
     return out
+
+def _run_auto_start(args, reg) -> int:
+    sub = args.auto_start_cmd
+    if sub is None:
+        print("usage: warden auto-start {list,add,remove}", file=sys.stderr)
+        return 2
+    if sub == "list":
+        print(json.dumps(list(reg.auto_start), indent=2)); return 0
+    if sub == "add":
+        from .catalog import load_skills
+        known = {s["name"] for s in load_skills(reg.skill_dirs)}
+        for name in args.names:
+            R.set_auto_start(reg, name, True)
+            if name not in known:
+                print(f"warning: '{name}' is not a registered skill; register its "
+                      "directory first with `warden add-skill <path>`.", file=sys.stderr)
+        R.save_registry(reg)
+        print(f"auto_start: {reg.auto_start}")
+        print("Restart the MCP client so it reloads warden's instructions.")
+        return 0
+    if sub == "remove":
+        for name in args.names:
+            R.set_auto_start(reg, name, False)
+        R.save_registry(reg)
+        print(f"auto_start: {reg.auto_start}")
+        print("Restart the MCP client so it reloads warden's instructions.")
+        return 0
+    return 2
+
 
 def _run_routing(args, reg) -> int:
     from .routing import load_routing, save_routing
@@ -167,6 +223,72 @@ def _run_routing(args, reg) -> int:
         block["rules"].append(rule)
         save_routing(reg, block); print("added routing rule"); return 0
     return 2
+
+def _prompt(text, default=None):
+    """Reads one line. Returns the default when the input is empty or absent."""
+    try:
+        got = input(text).strip()
+    except EOFError:
+        return default
+    return got or default
+
+
+def _run_init(args, home, cwd) -> int:
+    """Writes (or removes) the warden capability block in an agent file.
+
+    Interactive by default: it shows what it found and asks for the scope, the
+    file, and one confirmation before it writes. `--yes` skips the prompts and
+    uses `--scope`/`--file`, so scripts and tests stay non-interactive.
+    """
+    from . import agent_files as A
+    if args.print_only:
+        print(A.capability_block()); return 0
+
+    interactive = not args.yes
+    scope = args.scope
+    name = args.agent_file
+
+    if interactive:
+        found = [d for d in A.discover(home, cwd) if d["exists"]]
+        if found:
+            print("Found agent files:")
+            for d in found:
+                mark = " (has warden block)" if d["has_block"] else ""
+                print(f"  [{d['scope']}] {d['path']}{mark}")
+        else:
+            print("No agent files found yet. warden can create one.")
+        if scope is None:
+            scope = _prompt(f"Scope {A.SCOPES}? [user]: ", "user")
+            if scope not in A.SCOPES:
+                print(f"unknown scope '{scope}'", file=sys.stderr); return 2
+        # Never assume the file. If several already exist in this scope, ask.
+        present = [d["name"] for d in found if d["scope"] == scope]
+        if name is None:
+            choices = present or list(A.AGENT_FILES)
+            default = choices[0]
+            name = _prompt(f"File {choices}? [{default}]: ", default)
+            if name not in A.AGENT_FILES:
+                print(f"unknown file '{name}'", file=sys.stderr); return 2
+    else:
+        scope = scope or "user"
+        name = name or "CLAUDE.md"
+
+    path = A.candidate_path(name, scope, home, cwd)
+    verb = "Remove the warden block from" if args.remove else "Write the warden block to"
+    if interactive:
+        ok = _prompt(f"{verb} {path}? [y/N]: ", "n")
+        if ok.lower() not in ("y", "yes"):
+            print("no change"); return 0
+
+    changed = A.apply_to_file(path, remove=args.remove)
+    if args.remove:
+        print(f"removed the warden block from {path}" if changed else f"no warden block in {path}")
+    else:
+        print(f"wrote the warden block to {path}" if changed else f"{path} already has the warden block")
+        if scope == "local":
+            print(f"note: add {path.name} to .gitignore so it stays personal.")
+    return 0
+
 
 def main() -> None:
     sys.exit(run(sys.argv[1:]))

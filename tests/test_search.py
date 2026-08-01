@@ -44,6 +44,39 @@ class SearchCatalogTests(unittest.TestCase):
         results = search_catalog(many, "weather", limit=2)
         self.assertLessEqual(len(results), 2)
 
+    def test_multi_token_query_accumulates_matches(self):
+        entries = [
+            {"name": "deploy", "description": "Deploy an application"},
+            {"name": "list", "description": "List deployments"},
+        ]
+        results = search_catalog(entries, "deploy application", limit=5)
+        self.assertEqual(results[0]["name"], "deploy")
+
+    def test_name_and_description_both_contribute_to_score(self):
+        entries = [
+            {"name": "backup", "description": "Create a database backup"},
+            {"name": "database", "description": "Inspect tables"},
+        ]
+        results = search_catalog(entries, "database backup", limit=5)
+        self.assertEqual(results[0]["name"], "backup")
+
+    def test_equal_scores_keep_input_order(self):
+        entries = [
+            {"name": "alpha", "description": "same"},
+            {"name": "beta", "description": "same"},
+        ]
+        results = search_catalog(entries, "same", limit=5)
+        self.assertEqual([entry["name"] for entry in results], ["alpha", "beta"])
+
+    def test_limit_keeps_highest_scoring_entries(self):
+        entries = [
+            {"name": "weather", "description": "weather"},
+            {"name": "weather", "description": "forecast"},
+            {"name": "forecast", "description": "forecast"},
+        ]
+        results = search_catalog(entries, "weather", limit=1)
+        self.assertEqual(results[0]["description"], "weather")
+
 
 class SkillFrontmatterTests(unittest.TestCase):
     def test_parse_frontmatter(self):

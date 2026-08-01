@@ -68,7 +68,50 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(rc, 1)
             self.assertIn(f"problem: missing skill dir: {missing}", out.getvalue())
-            self.assertIn(f"problem: duplicate skill dir: {missing}", out.getvalue())
+            self.assertIn(f"warning: duplicate skill dir: {missing}", out.getvalue())
+
+    def test_doctor_treats_duplicate_skill_dir_as_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            config_path = pathlib.Path(env["WARDEN_CONFIG"])
+            config_path.parent.mkdir(parents=True)
+            skills = pathlib.Path(tmp) / "skills"
+            skills.mkdir()
+            config_path.write_text(
+                json.dumps({"mcp_servers": {}, "skill_dirs": [str(skills), str(skills)]}),
+                encoding="utf-8",
+            )
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = run(["doctor"], env=env)
+
+            self.assertEqual(rc, 0)
+            self.assertIn(f"warning: duplicate skill dir: {skills}", out.getvalue())
+            self.assertIn("registry healthy (warnings only)", out.getvalue())
+
+    def test_doctor_reports_unregistered_auto_start_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            config_path = pathlib.Path(env["WARDEN_CONFIG"])
+            config_path.parent.mkdir(parents=True)
+            fixtures = pathlib.Path(__file__).resolve().parent / "fixtures" / "skills"
+            config_path.write_text(
+                json.dumps({
+                    "mcp_servers": {},
+                    "skill_dirs": [str(fixtures)],
+                    "auto_start": ["greeter", "ghost"],
+                }),
+                encoding="utf-8",
+            )
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = run(["doctor"], env=env)
+
+            self.assertEqual(rc, 1)
+            self.assertIn("problem: auto_start skill is not registered: ghost", out.getvalue())
+            self.assertNotIn("problem: auto_start skill is not registered: greeter", out.getvalue())
 
     def _show(self, env):
         out = io.StringIO()
@@ -169,6 +212,138 @@ class CliTests(unittest.TestCase):
             err = io.StringIO()
             with redirect_stderr(err):
                 rc = run(["routing"], env=env)
+            self.assertNotEqual(rc, 0)
+
+    def test_init_print_only_emits_block(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = run(["init", "--print"], env={})
+        self.assertEqual(rc, 0)
+        self.assertIn("<!-- warden:begin -->", out.getvalue())
+        self.assertIn("`route`", out.getvalue())
+
+    def test_init_yes_user_scope_writes_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"HOME": tmp}
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = run(["init", "--yes", "--scope", "user", "--file", "CLAUDE.md"], env=env)
+            self.assertEqual(rc, 0)
+            target = pathlib.Path(tmp) / ".claude" / "CLAUDE.md"
+            self.assertIn("<!-- warden:begin -->", target.read_text(encoding="utf-8"))
+
+    def test_init_yes_is_idempotent_then_remove(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"HOME": tmp}
+            run(["init", "--yes"], env=env)  # defaults: user scope, CLAUDE.md
+            target = pathlib.Path(tmp) / ".claude" / "CLAUDE.md"
+            first = target.read_text(encoding="utf-8")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                run(["init", "--yes"], env=env)
+            self.assertEqual(target.read_text(encoding="utf-8"), first)
+            self.assertIn("already has", out.getvalue())
+            run(["init", "--yes", "--remove"], env=env)
+            self.assertNotIn("warden:begin", target.read_text(encoding="utf-8"))
+
+    def test_init_yes_project_scope_uses_cwd(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = pathlib.Path(tmp) / "proj"
+            proj.mkdir()
+            rc = run(["init", "--yes", "--scope", "project", "--file", "AGENTS.md"],
+                     env={"HOME": tmp}, cwd=proj)
+            self.assertEqual(rc, 0)
+            self.assertIn("warden:begin", (proj / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def _init_interactive(self, tmp, answers, argv=("init",)):
+        from unittest import mock
+        proj = pathlib.Path(tmp) / "proj"; proj.mkdir(exist_ok=True)
+        out = io.StringIO()
+        with mock.patch("builtins.input", side_effect=answers), redirect_stdout(out):
+            rc = run(list(argv), env={"HOME": tmp}, cwd=proj)
+        return rc, out.getvalue(), proj
+
+    def test_init_interactive_prompts_and_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, out, proj = self._init_interactive(tmp, ["project", "CLAUDE.md", "y"])
+            self.assertEqual(rc, 0)
+            self.assertIn("warden:begin", (proj / "CLAUDE.md").read_text(encoding="utf-8"))
+
+    def test_init_interactive_decline_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, out, proj = self._init_interactive(tmp, ["project", "CLAUDE.md", "n"])
+            self.assertEqual(rc, 0)
+            self.assertIn("no change", out)
+            self.assertFalse((proj / "CLAUDE.md").exists())
+
+    def test_init_interactive_unknown_scope_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            err = io.StringIO()
+            from unittest import mock
+            with mock.patch("builtins.input", side_effect=["nope"]), redirect_stderr(err):
+                rc = run(["init"], env={"HOME": tmp}, cwd=pathlib.Path(tmp))
+            self.assertEqual(rc, 2)
+            self.assertIn("unknown scope", err.getvalue())
+
+    def test_init_interactive_unknown_file_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            err = io.StringIO()
+            from unittest import mock
+            with mock.patch("builtins.input", side_effect=["user", "NOPE.md"]), redirect_stderr(err):
+                rc = run(["init"], env={"HOME": tmp}, cwd=pathlib.Path(tmp))
+            self.assertEqual(rc, 2)
+            self.assertIn("unknown file", err.getvalue())
+
+    def test_init_interactive_remove(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = pathlib.Path(tmp) / "proj"; proj.mkdir()
+            run(["init", "--yes", "--scope", "project", "--file", "CLAUDE.md"],
+                env={"HOME": tmp}, cwd=proj)
+            rc, out, proj = self._init_interactive(tmp, ["project", "CLAUDE.md", "y"], argv=("init", "--remove"))
+            self.assertEqual(rc, 0)
+            self.assertIn("removed", out)
+            self.assertNotIn("warden:begin", (proj / "CLAUDE.md").read_text(encoding="utf-8"))
+
+    def test_auto_start_add_list_remove(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            self.assertEqual(run(["auto-start", "add", "ponytail", "coder"], env=env), 0)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                run(["auto-start", "list"], env=env)
+            self.assertEqual(json.loads(out.getvalue()), ["ponytail", "coder"])
+            self.assertEqual(run(["auto-start", "remove", "coder"], env=env), 0)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                run(["auto-start", "list"], env=env)
+            self.assertEqual(json.loads(out.getvalue()), ["ponytail"])
+
+    def test_auto_start_add_warns_on_unregistered_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["auto-start", "add", "ghost"], env=env)
+            self.assertEqual(rc, 0)  # still added; warning is advisory
+            self.assertIn("not a registered skill", err.getvalue())
+
+    def test_auto_start_add_known_skill_no_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            fixtures = pathlib.Path(__file__).resolve().parent / "fixtures" / "skills"
+            run(["add-skill", str(fixtures)], env=env)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["auto-start", "add", "greeter"], env=env)
+            self.assertEqual(rc, 0)
+            self.assertNotIn("not a registered skill", err.getvalue())
+
+    def test_auto_start_no_subcommand_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = run(["auto-start"], env=env)
             self.assertNotEqual(rc, 0)
 
     def test_migrate_dry_run_changes_nothing(self):

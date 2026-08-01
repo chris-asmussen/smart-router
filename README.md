@@ -64,12 +64,22 @@ when the agent asks for it.
    items at start. warden does not need a restart, because its catalog
    updates immediately.
 
-5. **Use warden.** Give Claude a usual instruction. When Claude needs a
-   tool, it calls `search`. Then it calls `call_tool` or `use_skill`.
-   warden does not start hidden skills automatically. Add the instruction
-   from [Limitation](#limitation-warden-does-not-start-skills-automatically)
-   to your `CLAUDE.md`. To add or move more items later, an agent calls the
-   `admin` tool, or you use the CLI. To reverse a migration, use
+5. **Tell the agent to use warden (one command).** warden does not start
+   hidden skills automatically. Run `warden init`. It writes a short
+   capability block into your agent-instruction file. The block tells the agent
+   to call `route` or `search` first. The command asks for the scope and the
+   file, and it does not change anything until you confirm.
+   ```bash
+   warden init                       # asks the scope and the file, then writes
+   ```
+   Refer to
+   [Limitation](#limitation-warden-does-not-start-skills-automatically) for the
+   full text and the manual method.
+
+6. **Use warden.** Give Claude a usual instruction. When Claude needs a
+   tool, it calls `route` or `search`. Then it calls `call_tool` or
+   `use_skill`. To add or move more items later, an agent calls the `admin`
+   tool, or you use the CLI. To reverse a migration, use
    `warden restore --id <id>`.
 
 Each section below gives more data: [CLI](#cli),
@@ -145,9 +155,11 @@ subcommand is `serve`.
 | Command | Function |
 | --- | --- |
 | `warden serve` | Runs the MCP server. This is the default. |
+| `warden init [--scope user\|project\|local] [--file CLAUDE.md\|AGENTS.md\|GEMINI.md] [--remove] [--print] [--yes]` | Writes the warden capability block into your agent-instruction file, so the agent calls `route` first. It asks for the scope and the file. Add `--yes` for a non-interactive run. |
 | `warden add-mcp <name> --command <cmd> [--args ...] [--env K=V ...]` | Adds an MCP server to the registry. |
 | `warden add-skill <path>` | Adds a Skill directory to the registry. warden reads its `SKILL.md` files. |
 | `warden list` | Prints the registry as JSON. It shows the MCP servers, the skill directories, and the migration ids. |
+| `warden doctor` | Checks skill directories and `auto_start` references without changing the registry. Missing entries fail; duplicate directories are warnings. |
 | `warden migrate [--all] [--mcp ...] [--plugins ...] [--skills ...] [--apply] [--home <dir>]` | Moves MCP servers and Skills out of Claude Code. This is a dry run. Add `--apply` to make the changes. Add `--home <dir>` to use a different Claude home for a test. |
 | `warden restore --id <migration-id> [--home <dir>]` | Reverses a migration. It puts back the changes in Claude. Add `--home <dir>` for a test home. |
 | `warden routing show` | Prints the routing configuration as JSON. |
@@ -155,6 +167,9 @@ subcommand is `serve`.
 | `warden routing prefer <name...>` | Adds names to `priority_order`. |
 | `warden routing exclude <name...>` | Adds names to `exclude`. |
 | `warden routing add-rule --ext <e...> \| --glob <g> [--prefer <n...>] [--exclude <n...>]` | Adds a per-file routing rule. |
+| `warden auto-start list` | Prints the Skills that load at every session start. |
+| `warden auto-start add <name...>` | Marks Skills to load at every session start. Restart the client to apply. |
+| `warden auto-start remove <name...>` | Stops the Skills from loading at every session start. |
 
 ```bash
 warden add-mcp github --command npx --args -y @modelcontextprotocol/server-github
@@ -180,6 +195,9 @@ catalog again. Therefore `search` shows the change immediately. The actions are:
 - `get_routing` — returns the routing configuration.
 - `set_routing` — `params: {mode?, priority_order?, exclude?, rules?}`. It
   changes the routing configuration. Refer to [Routing](#routing).
+- `set_auto_start` — `params: {name, enabled?}`. It marks a Skill to load at
+  every session start, or it removes the mark. Refer to
+  [Always-on Skills](#always-on-skills-auto_start).
 
 ## Routing
 
@@ -222,6 +240,39 @@ warden routing add-rule --ext tsx --prefer ts-tools
 warden routing show
 ```
 
+## Always-on Skills (auto_start)
+
+Most Skills stay hidden until `search` surfaces them. This keeps the context
+small. Some Skills only work when they are always active, though. A "think
+before you code" ruleset, for example, must sit in the context before the agent
+writes anything; it cannot wait for a search. `auto_start` is the opt-in for
+that case.
+
+A Skill flagged `auto_start` has its full text folded into warden's MCP server
+instructions. The MCP client reads those instructions one time, at the start of
+each session, so the Skill is always active. warden still stays one MCP server,
+and your other Skills stay on demand.
+
+```bash
+warden add-skill ~/skills/ponytail   # register the skill dir first
+warden auto-start add ponytail       # mark it always-on (by skill name)
+warden auto-start list
+warden auto-start remove ponytail
+```
+
+An agent can do the same with the `admin` `set_auto_start` action.
+
+Keep this set small. Each always-on Skill spends context in every session, which
+is the cost warden otherwise removes. Note these limits:
+
+- **It needs a client restart.** The MCP client reads the instructions only at
+  start. So a new or removed `auto_start` Skill takes effect at the next
+  restart. The on-demand catalog still updates immediately.
+- **The client must inject server instructions.** Claude Code does. Not every
+  MCP client does.
+- **warden caps the size.** If the always-on text gets too long, warden
+  truncates it and prints a warning. Flag fewer Skills.
+
 ## Migration from Claude Code
 
 Claude Code loads each MCP tool and Skill into the context at start. The
@@ -263,18 +314,39 @@ warden restore --id <id> --home /tmp/fake-claude
 
 ### Limitation: warden does not start skills automatically
 
-You get skills behind warden only through `search`. Claude Code cannot
-start these skills automatically from their description. This is the cost to
-keep them out of the context until you need them. To help, tell the model to use
-warden first. This is an example `CLAUDE.md` text:
+You get skills behind warden only through `route` or `search`. Claude Code
+cannot start these skills automatically from their description. This is the cost
+to keep them out of the context until you need them. To help, tell the model to
+use warden first.
+
+For a Skill that must be active in every session (for example, a "think before
+you code" ruleset), use [`auto_start`](#always-on-skills-auto_start). That is the
+opt-in override to this limitation, for the few Skills that need it.
+
+**The easy way.** Run `warden init`. It writes the capability block below into
+your agent-instruction file (`CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`). It asks
+for the scope (user, project, or local) and for the file, and it writes only
+after you confirm. A second run replaces the block in place. `warden init
+--remove` strips it again.
+
+```bash
+warden init                 # interactive: asks the scope and the file
+warden init --print         # show the block without writing
+warden init --remove        # remove the block
+```
+
+**The manual way.** Copy this text into your agent-instruction file:
 
 ```markdown
-## Capabilities
+## Capabilities via warden
 
-warden hides many tools and skills to keep them out of the context. Before
-you decide that a capability is not available, call the warden `search`
-with a description of your need. Then call `use_skill` or `call_tool` on a
-result.
+warden keeps many tools and Skills out of your context. Before you decide
+that a capability is not available, use warden first:
+
+1. Call `route` with a short description of the task. Add the current file
+   path if you have one. `route` returns the best tool or Skill to use.
+2. Or call `search` to find a capability by keyword.
+3. Then call `call_tool` or `use_skill` on the result.
 ```
 
 ## Tests
@@ -299,3 +371,9 @@ installed, this test skips automatically.
   the subprocess becomes a measured problem.
 - The configuration is plain JSON. It does not need a YAML dependency for two
   keys.
+
+## Support
+
+If warden is useful to you, add a star to the repository. A star helps other
+people find the project. It is optional. It is not a condition to use warden or
+to contribute.
