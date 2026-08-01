@@ -159,6 +159,7 @@ subcommand is `serve`.
 | `warden add-mcp <name> --command <cmd> [--args ...] [--env K=V ...]` | Adds an MCP server to the registry. |
 | `warden add-skill <path>` | Adds a Skill directory to the registry. warden reads its `SKILL.md` files. |
 | `warden list` | Prints the registry as JSON. It shows the MCP servers, the skill directories, and the migration ids. |
+| `warden doctor` | Checks skill directories and `auto_start` references without changing the registry. Missing entries fail; duplicate directories are warnings. |
 | `warden migrate [--all] [--mcp ...] [--plugins ...] [--skills ...] [--apply] [--home <dir>]` | Moves MCP servers and Skills out of Claude Code. This is a dry run. Add `--apply` to make the changes. Add `--home <dir>` to use a different Claude home for a test. |
 | `warden restore --id <migration-id> [--home <dir>]` | Reverses a migration. It puts back the changes in Claude. Add `--home <dir>` for a test home. |
 | `warden routing show` | Prints the routing configuration as JSON. |

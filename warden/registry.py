@@ -75,3 +75,34 @@ def summary(reg) -> dict[str, Any]:
     return {"mcp_servers": sorted(reg.mcp_servers), "skill_dirs": list(reg.skill_dirs),
             "migrations": [m.get("id") for m in reg.migrations],
             "auto_start": list(reg.auto_start)}
+
+def diagnose(reg) -> dict[str, Any]:
+    """Return read-only registry health details for the CLI doctor command."""
+    from .catalog import load_skills
+
+    normalized: list[str] = []
+    missing: list[str] = []
+    for value in reg.skill_dirs:
+        path = pathlib.Path(value).expanduser().resolve()
+        normalized.append(str(path))
+        if not path.is_dir():
+            missing.append(str(path))
+
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for path in normalized:
+        if path in seen and path not in duplicates:
+            duplicates.append(path)
+        seen.add(path)
+
+    known_skills = {skill["name"] for skill in load_skills(reg.skill_dirs)}
+    missing_auto_start = sorted({name for name in reg.auto_start if name not in known_skills})
+
+    return {
+        "registry_path": str(reg.path),
+        "mcp_server_count": len(reg.mcp_servers),
+        "skill_dir_count": len(reg.skill_dirs),
+        "missing_skill_dirs": sorted(missing),
+        "duplicate_skill_dirs": sorted(duplicates),
+        "missing_auto_start_skills": missing_auto_start,
+    }

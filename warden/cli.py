@@ -18,6 +18,7 @@ def build_parser():
     a.add_argument("--args", action="append", default=None); a.add_argument("--env", action="append", default=None)
     s = sub.add_parser("add-skill"); s.add_argument("path")
     sub.add_parser("list")
+    sub.add_parser("doctor")
     r = sub.add_parser("restore"); r.add_argument("--id", required=True)
     r.add_argument("--home", default=None,
                    help="Operate on this Claude home instead of the real ~/.claude (safe testing).")
@@ -108,6 +109,23 @@ def run(argv, env=None, home=None, now=None, cwd=None) -> int:
         R.add_skill_dir(reg, args.path); R.save_registry(reg); print(f"registered skill dir: {args.path}"); return 0
     if cmd == "list":
         print(json.dumps(R.summary(reg), indent=2)); return 0
+    if cmd == "doctor":
+        report = R.diagnose(reg)
+        print(f"registry: {report['registry_path']}")
+        print(f"mcp servers: {report['mcp_server_count']}")
+        print(f"skill dirs: {report['skill_dir_count']}")
+        for path in report["missing_skill_dirs"]:
+            print(f"problem: missing skill dir: {path}")
+        for path in report["duplicate_skill_dirs"]:
+            print(f"warning: duplicate skill dir: {path}")
+        for name in report["missing_auto_start_skills"]:
+            print(f"problem: auto_start skill is not registered: {name}")
+        problems = report["missing_skill_dirs"] or report["missing_auto_start_skills"]
+        if not problems and not report["duplicate_skill_dirs"]:
+            print("registry healthy")
+        elif not problems:
+            print("registry healthy (warnings only)")
+        return 1 if problems else 0
     if cmd == "migrate":
         targets = {"mcp": "all" if args.all else args.mcp,
                    "plugins": "all" if args.all else args.plugins,
